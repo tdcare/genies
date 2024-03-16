@@ -7,7 +7,7 @@
 // use std::time::Duration;
 // use log::LevelFilter;
 
-use  ddd_dapr_derive::Config;
+use  genies_derive::Config;
 
 // use tracing::{info,Level};
 // use tracing_subscriber::FmtSubscriber;
