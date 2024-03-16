@@ -1,0 +1,33 @@
+[package]
+name = "genies_derive"
+version = "1.0.0"
+authors = ["tdcare"]
+license = "MIT/Apache-2.0"
+
+description = "Derive macros for convient implementation of some traits of the `ddd_dapr` crate"
+
+keywords = ["dominevent", "cqrs", "aggregate", "ddd","dapr"]
+categories = ["architecture", "pattern"]
+
+documentation = "https://docs.rs/genies_derive"
+readme = "README.md"
+
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+#proc-macro2 = "1"
+#quote = "1"
+#syn = { version = "1.0", features = ["extra-traits"] }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "1.0", features = ["full"] }
+rust-format = "0.3"
+
+[features]
+debug_mode=[]
+
+[dev-dependencies]
+trybuild = "1"
