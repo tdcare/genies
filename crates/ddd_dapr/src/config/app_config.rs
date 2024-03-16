@@ -1,4 +1,4 @@
-use  ddd_dapr_derive::Config;
+use  genies_derive::Config;
 
 ///服务启动配置
 #[derive(Config,Debug,serde::Deserialize)]
