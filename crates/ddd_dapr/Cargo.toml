@@ -70,8 +70,8 @@ surf = {version="^2.1.0",default-features = false,features=["h1-client-rustls","
 
 #once_cell = "1.12.0"
 #genies_derive = {version="1.0.0", path = "../ddd_dapr_derive", features=["debug_mode"] }
-genies_derive = {version="1.0.0",  features=["debug_mode"] }
-
+#genies_derive = {version="1.0.0",  features=["debug_mode"] }
+genies_derive = "1.0.0"
 #ddd_dapr_derive = { version="1.0.0", features=["debug_mode"] }
 
 #ddd_dapr_derive = {git="https://tzw:Tdcarefor123@hub.tdcare.cn:6043/tdcare/ddd_dapr_derive.git",branch="salvo"}
