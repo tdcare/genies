@@ -1,0 +1,6 @@
+topics:
+  - "news"
+  - "updates"
+  - "alerts"
+numbers: [10, 20, 30]
+empty_array: []

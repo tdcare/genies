@@ -1,0 +1,14 @@
+D:\tdcare\genies\target\debug\deps\libinfer-108a6e8de952a446.rmeta: C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\lib.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\map.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\mod.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\app.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\archive.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\audio.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\doc.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\font.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\image.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\video.rs
+
+D:\tdcare\genies\target\debug\deps\infer-108a6e8de952a446.d: C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\lib.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\map.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\mod.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\app.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\archive.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\audio.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\doc.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\font.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\image.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\video.rs
+
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\lib.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\map.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\mod.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\app.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\archive.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\audio.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\doc.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\font.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\image.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\infer-0.2.3\src\matchers\video.rs:

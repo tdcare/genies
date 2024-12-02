@@ -1,0 +1,29 @@
+[package]
+name = "genies_derive"
+version = "1.0.0"
+edition = "2021"
+authors = ["TDcare"]
+description = "A powerful derive macro for configuration management in Rust"
+license = "MIT"
+repository = "https://github.com/tdcare/genies_derive"
+documentation = "https://docs.rs/genies_derive"
+readme = "README.md"
+keywords = ["config", "configuration", "derive", "macro", "settings"]
+categories = ["config", "development-tools"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2.0", features = ["full", "extra-traits"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+thiserror = "1.0"
+convert_case = "0.6"
+async-trait = "0.1"
+log = "0.4"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }

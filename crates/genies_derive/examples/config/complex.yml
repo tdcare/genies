@@ -1,0 +1,8 @@
+app_name: "production-app"
+environment: "production"
+allowed_hosts:
+  - "api.example.com"
+  - "admin.example.com"
+ports: [8080, 8081, 8082]
+connection_timeout: 60
+read_timeout: 600

@@ -1,0 +1,13 @@
+d:\tdcare\genies\target\debug\deps\libquote-db4770de41f37e29.rmeta: C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src/lib.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\ext.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\format.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\ident_fragment.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\to_tokens.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\runtime.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\spanned.rs
+
+d:\tdcare\genies\target\debug\deps\libquote-db4770de41f37e29.rlib: C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src/lib.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\ext.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\format.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\ident_fragment.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\to_tokens.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\runtime.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\spanned.rs
+
+d:\tdcare\genies\target\debug\deps\quote-db4770de41f37e29.d: C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src/lib.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\ext.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\format.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\ident_fragment.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\to_tokens.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\runtime.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\spanned.rs
+
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src/lib.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\ext.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\format.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\ident_fragment.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\to_tokens.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\runtime.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\quote-1.0.37\src\spanned.rs:

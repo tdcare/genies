@@ -1,0 +1,10 @@
+D:\tdcare\genies\target\debug\deps\libasync_global_executor-29dee90143781412.rmeta: C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\lib.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\config.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\executor.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\init.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\reactor.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\threading.rs
+
+D:\tdcare\genies\target\debug\deps\async_global_executor-29dee90143781412.d: C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\lib.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\config.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\executor.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\init.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\reactor.rs C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\threading.rs
+
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\lib.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\config.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\executor.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\init.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\reactor.rs:
+C:\Users\tzw\.cargo\registry\src\rsproxy.cn-0dccff568467c15b\async-global-executor-2.4.1\src\threading.rs:
