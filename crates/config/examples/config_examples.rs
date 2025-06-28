@@ -1,7 +1,7 @@
+
 use genies_derive::Config;
 use serde::{Deserialize, Serialize};
-use genies::error::ConfigError;
-use std::str::FromStr;
+
 
 /// 基础配置示例
 #[derive(Config, Debug, Deserialize, Serialize)]
@@ -76,25 +76,46 @@ pub struct ComplexConfig {
     pub read_timeout: Option<u64>,
 }
 
+/// 环境变量数组功能示例
+#[derive(Config, Debug, Deserialize, Serialize)]
+pub struct EnvArrayConfig {
+    #[config(default = "default1,default2")]
+    pub topics: Vec<String>,
+
+    #[config(default = "1,2,3")]
+    pub numbers: Vec<i32>,
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. 基础配置示例
-    let basic_config = BasicConfig::from_sources("config/basic.yml")?;
+    println!("cwd: {:?}", std::env::current_dir()?);    // 1. 基础配置示例
+    let basic_config = BasicConfig::from_sources("crates/genies_derive/examples/config/basic.yml")?;
     println!("Basic Config: {:?}", basic_config);
 
     // 2. 数组配置示例
-    let array_config = ArrayConfig::from_sources("config/array.yml")?;
+    let array_config = ArrayConfig::from_sources("crates/genies_derive/examples/config/array.yml")?;
     println!("Array Config: {:?}", array_config);
 
     // // 3. 可选值配置示例
     // 需要在 config.rs 中定义 OptionalConfig 结构体
-    let optional_config = OptionalConfig::from_sources("config/optional.yml")?;
+    let optional_config = OptionalConfig::from_sources("crates/genies_derive/examples/config/optional.yml")?;
     println!("Optional Config: {:?}", optional_config);
 
     // 4. 复杂配置示例
     // 需要在 config.rs 中定义 ComplexConfig 结构体
-    let complex_config = ComplexConfig::from_sources("config/complex.yml")?;
+    let complex_config = ComplexConfig::from_sources("crates/genies_derive/examples/config/complex.yml")?;
     println!("Complex Config: {:?}", complex_config);
+
+    // 环境变量数组功能示例
+    // 运行前请设置环境变量：
+    // Windows PowerShell:
+    //   $env:TOPICS="env_topic1,env_topic2"
+    //   $env:NUMBERS="10,20,30"
+    // Linux/Mac:
+    //   export TOPICS="env_topic1,env_topic2"
+    //   export NUMBERS="10,20,30"
+    let env_array_config = EnvArrayConfig::from_sources("crates/genies_derive/examples/config/array.yml")?;
+    println!("EnvArrayConfig (from env): {:?}", env_array_config);
 
     // // 5. 配置热重载示例
     // let mut config = config::ComplexConfig::from_sources("config/complex.yml")?;

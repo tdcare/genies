@@ -1,2 +1,6 @@
 
 target
+*.lock
+.vscode
+.idea
+.idea

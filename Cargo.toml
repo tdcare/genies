@@ -2,7 +2,9 @@
 resolver = "2"
 members = [
     "crates/genies",
-    "crates/genies_derive"
+    "crates/genies_derive",
+    "crates/core",
+    "crates/config"
 ]
 
 [workspace.package]
@@ -11,3 +13,26 @@ edition = "2021"
 authors = ["tdcare"]
 license = "MIT"
 repository = "https://github.com/tdcare/genies"
+
+[workspace.dependencies]
+genies_core = { path = "crates/core" }
+genies_derive = { path = "crates/genies_derive" }
+genies_config = { path = "crates/config" }
+
+log = "0.4.17"
+thiserror = "1.0"
+serde = { version = "1.0.148", features = ["derive"] }
+serde_json = "1.0.89"
+serde_yaml = "0.9"
+
+
+rbatis = {version="4.5",features = ["debug_mode"]} #必选
+rbs = { version = "4.5"}
+rbdc = { version = "4.5", default-features = false }
+rbdc-mysql={version="4.5"}
+
+tracing = "0.1"
+tracing-subscriber ={version= "0.3",features = ["env-filter"]}
+
+
+tokio = { version = "1.22.0", features = ["full"] }

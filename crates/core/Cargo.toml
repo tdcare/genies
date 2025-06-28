@@ -1,0 +1,23 @@
+[package]
+name = "genies_core"
+version = "1.0.0"
+authors = ["tdcare"]
+edition = "2021"
+license = "MIT/Apache-2.0"
+description = "整合DDD与Dapr 的 core 库"
+keywords = ["dominevent", "aggregate", "ddd","dapr"]
+categories = ["config", "rust-patterns"]
+documentation = "https://docs.rs/genies_core"
+readme = "README.md"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+
+[dependencies]
+thiserror = {workspace = true}
+serde = { workspace = true}
+serde_json = { workspace = true}
+
+rbdc = { workspace = true}
+
+[dev-dependencies]
+
