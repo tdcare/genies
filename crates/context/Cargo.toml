@@ -1,6 +1,6 @@
 [package]
 name = "genies_context"
-version = "1.0.0"
+version.workspace = true
 authors = ["tdcare"]
 edition = "2021"
 license = "MIT/Apache-2.0"
