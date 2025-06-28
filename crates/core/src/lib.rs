@@ -6,6 +6,7 @@
  */
 pub mod error;
 pub mod jwt;
+pub mod condition;
 
 
 /// 自定义 Result 类型，接受两个泛型参数：T 为成功时的返回类型，E 为错误类型

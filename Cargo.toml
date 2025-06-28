@@ -1,16 +1,6 @@
 [workspace]
+members = ["crates/*"]
 resolver = "2"
-members = [
-    # "crates/genies",
-    "crates/genies_derive",
-    "crates/core",
-    "crates/config",
-    "crates/context",
-    "crates/cache",
-    "crates/dapr",
-    "crates/ddd",
-    "crates/k8s"
-]
 
 [workspace.package]
 version = "1.1.0"
