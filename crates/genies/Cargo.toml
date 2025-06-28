@@ -1,0 +1,34 @@
+[package]
+name = "genies"
+version.workspace = true
+authors = ["tdcare"]
+edition = "2021"
+license = "MIT/Apache-2.0"
+description = "整合DDD与Dapr 兼容基于 Eventuate 的Java 项目 "
+keywords = ["dominevent", "aggregate", "ddd","dapr"]
+categories = ["config", "rust-patterns"]
+documentation = "https://docs.rs/genies"
+readme = "README.md"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+genies_core = {workspace =true}
+genies_derive = {workspace =true}
+genies_config = {workspace =true}
+genies_context = {workspace =true}
+genies_cache = {workspace =true}
+genies_dapr = {workspace =true}
+genies_ddd = {workspace =true}
+genies_k8s = {workspace =true}
+
+rbatis = {workspace =true} #必选
+rbs = {workspace =true}
+rbdc = {workspace =true}
+#yaml-rust = "0"
+
+
+
+
+
+
