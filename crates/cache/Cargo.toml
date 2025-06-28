@@ -1,13 +1,13 @@
 [package]
-name = "genies_config"
+name = "genies_cache"
 version = "1.0.0"
 authors = ["tdcare"]
 edition = "2021"
 license = "MIT/Apache-2.0"
-description = "整合DDD与Dapr 的 config 库"
+description = "整合DDD与Dapr 的 cache 库"
 keywords = ["dominevent", "aggregate", "ddd","dapr"]
 categories = ["config", "rust-patterns"]
-documentation = "https://docs.rs/genies_config"
+documentation = "https://docs.rs/genies_cache"
 readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
@@ -15,15 +15,20 @@ readme = "README.md"
 [dependencies]
 genies_core = { workspace = true }
 genies_derive = { workspace = true }
+genies_config = { workspace = true }
+
 
 serde = {workspace =true}
+serde_json = {workspace =true}
 serde_yaml = {workspace =true}
 
 log = {workspace =true}
-tracing = {workspace =true}
-tracing-subscriber ={workspace =true}
+
 
 tokio = { workspace = true }
+
+redis = {version = "0.22.1", features = ["async-std-comp"] }
+async-trait = {workspace = true}
 
 
 

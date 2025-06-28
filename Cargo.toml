@@ -1,10 +1,15 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/genies",
+    # "crates/genies",
     "crates/genies_derive",
     "crates/core",
-    "crates/config"
+    "crates/config",
+    "crates/context",
+    "crates/cache",
+    "crates/dapr",
+    "crates/ddd",
+    "crates/k8s"
 ]
 
 [workspace.package]
@@ -18,6 +23,12 @@ repository = "https://github.com/tdcare/genies"
 genies_core = { path = "crates/core" }
 genies_derive = { path = "crates/genies_derive" }
 genies_config = { path = "crates/config" }
+genies_context = { path = "crates/context" }
+genies_cache = { path = "crates/cache" }
+genies_dapr = { path = "crates/dapr" }
+genies_ddd = { path = "crates/ddd" }
+genies_k8s = { path = "crates/k8s" }
+
 
 log = "0.4.17"
 thiserror = "1.0"
@@ -36,3 +47,8 @@ tracing-subscriber ={version= "0.3",features = ["env-filter"]}
 
 
 tokio = { version = "1.22.0", features = ["full"] }
+
+
+salvo = {version="0.58.3",features=["rustls"]}
+
+async-trait = "0.1.59"

@@ -1,31 +1,33 @@
 [package]
-name = "genies_config"
+name = "genies_k8s"
 version = "1.0.0"
 authors = ["tdcare"]
 edition = "2021"
 license = "MIT/Apache-2.0"
-description = "整合DDD与Dapr 的 config 库"
+description = "整合DDD与Dapr 的 k8s 库"
 keywords = ["dominevent", "aggregate", "ddd","dapr"]
 categories = ["config", "rust-patterns"]
-documentation = "https://docs.rs/genies_config"
+documentation = "https://docs.rs/genies_k8s"
 readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 
 [dependencies]
-genies_core = { workspace = true }
-genies_derive = { workspace = true }
+genies_context = { workspace = true }
+
+
+
 
 serde = {workspace =true}
-serde_yaml = {workspace =true}
+serde_json = {workspace =true}
+
 
 log = {workspace =true}
-tracing = {workspace =true}
-tracing-subscriber ={workspace =true}
+
 
 tokio = { workspace = true }
-
-
+salvo = {workspace =true}
+rbatis = {version="4.5",features = ["debug_mode"]}
 
 [dev-dependencies]
 
