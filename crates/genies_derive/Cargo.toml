@@ -1,6 +1,6 @@
 [package]
 name = "genies_derive"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["TDcare"]
 description = "A powerful derive macro for configuration management in Rust"
@@ -15,6 +15,7 @@ categories = ["config", "development-tools"]
 proc-macro = true
 
 [dependencies]
+genies = { path = "../genies" }
 syn = { version = "2.0", features = ["full", "extra-traits"] }
 quote = "1.0"
 proc-macro2 = "1.0"
@@ -24,6 +25,7 @@ thiserror = "1.0"
 convert_case = "0.6"
 async-trait = "0.1"
 log = "0.4"
+paste = "1.0.15"
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

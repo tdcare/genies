@@ -133,6 +133,34 @@ impl<'de> Deserialize<'de> for Error {
     }
 }
 
+
+/// Error type for configuration operations
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("Validation error: {0}")]
+    ValidationError(String),
+    
+    #[error("Parse error: {0}")]
+    ParseError(String),
+    
+    #[error("Environment error: {0}")]
+    EnvError(String),
+    
+    #[error("Build error: {0}")]
+    BuildError(String),
+    
+    #[error("Reload error: {0}")]
+    ReloadError(String),
+
+    #[error("File error: {0}")]
+    FileError(String),
+
+    #[error("Conversion error: {0}")]
+    ConversionError(String),
+}
+
+
+
 #[test]
 fn test_json_error() {
     let e = Error::from("fuck");

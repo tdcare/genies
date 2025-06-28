@@ -28,6 +28,20 @@ pub mod error;
 pub mod k8s;
 pub mod util;
 
+
+/// Trait for configuration hot reloading
+#[async_trait::async_trait]
+pub trait ConfigReload {
+    async fn reload(&mut self) -> std::result::Result<(), ConfigError>;
+}
+
+/// Trait for type conversion
+pub trait ConfigConvert<T> {
+    fn convert(&self) -> std::result::Result<T, ConfigError>;
+}
+
+
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// 获取 rbatis 连接

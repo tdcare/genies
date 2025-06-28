@@ -1,5 +1,7 @@
 use genies_derive::Config;
 use serde::{Deserialize, Serialize};
+use genies::error::ConfigError;
+use std::str::FromStr;
 
 /// 基础配置示例
 #[derive(Config, Debug, Deserialize, Serialize)]
@@ -84,17 +86,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let array_config = ArrayConfig::from_sources("config/array.yml")?;
     println!("Array Config: {:?}", array_config);
 
-    // 3. 可选值配置示例
+    // // 3. 可选值配置示例
+    // 需要在 config.rs 中定义 OptionalConfig 结构体
     let optional_config = OptionalConfig::from_sources("config/optional.yml")?;
     println!("Optional Config: {:?}", optional_config);
 
     // 4. 复杂配置示例
+    // 需要在 config.rs 中定义 ComplexConfig 结构体
     let complex_config = ComplexConfig::from_sources("config/complex.yml")?;
     println!("Complex Config: {:?}", complex_config);
 
-    // 5. 配置热重载示例
-    let mut config = ComplexConfig::from_sources("config/complex.yml")?;
-    config.reload().await?;
+    // // 5. 配置热重载示例
+    // let mut config = config::ComplexConfig::from_sources("config/complex.yml")?;
+    // config.reload().await?;
 
     Ok(())
 }
