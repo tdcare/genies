@@ -20,14 +20,14 @@ license = "MIT"
 repository = "https://github.com/tdcare/genies"
 
 [workspace.dependencies]
-genies_core = { path = "crates/core" }
-genies_derive = { path = "crates/genies_derive" }
-genies_config = { path = "crates/config" }
-genies_context = { path = "crates/context" }
-genies_cache = { path = "crates/cache" }
-genies_dapr = { path = "crates/dapr" }
-genies_ddd = { path = "crates/ddd" }
-genies_k8s = { path = "crates/k8s" }
+genies_core = {version ="1.1.0", path = "crates/core" }
+genies_derive = {version = "1.1.0", path = "crates/genies_derive" }
+genies_config = {version = "1.1.0", path = "crates/config" }
+genies_context = {version = "1.1.0", path = "crates/context" }
+genies_cache = {version ="1.1.0", path = "crates/cache" }
+genies_dapr = {version = "1.1.0", path = "crates/dapr" }
+genies_ddd = {version ="1.1.0", path = "crates/ddd" }
+genies_k8s = { version ="1.1.0", path = "crates/k8s" }
 
 
 log = "0.4.17"

@@ -1,6 +1,6 @@
 [package]
 name = "genies_derive"
-version.workspace = true
+version = { workspace = true }
 edition = "2021"
 authors = ["TDcare"]
 description = "A powerful derive macro for configuration management in Rust"
