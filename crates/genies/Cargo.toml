@@ -22,6 +22,9 @@ genies_dapr = {workspace =true}
 genies_ddd = {workspace =true}
 genies_k8s = {workspace =true}
 
+serde = {workspace =true}
+serde_json = {workspace =true}
+
 rbatis = {workspace =true} #必选
 rbs = {workspace =true}
 rbdc = {workspace =true}
