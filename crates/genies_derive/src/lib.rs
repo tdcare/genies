@@ -5,6 +5,7 @@ extern crate proc_macro;
 mod aggregate_type;
 mod event_type;
 mod config_type;
+mod config_core_type;
 mod helpers;
 mod topic;
 mod wrapper;
@@ -25,7 +26,8 @@ use crate::event_type::{
     derive_event_type_for_enum, derive_event_type_for_struct, derive_event_type_for_union,
 };
 
-use crate::config_type::{derive_config_type_for_struct,derive_config_core_type_for_struct};
+use crate::config_type::{derive_config_type_for_struct};
+use crate::config_core_type::{derive_config_core_type_for_struct};
 use crate::wrapper::impl_wrapper;
 /// 对领域事件进行标记
 #[proc_macro_derive(DomainEvent, attributes(event_type, event_type_version, event_source))]
