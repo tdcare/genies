@@ -34,7 +34,7 @@ pub use genies_k8s::*;
 #[macro_export]
 macro_rules! pool {
     () => {
-        &mut ddd_dapr::config::CONTEXT.rbatis.clone()
+        &mut genies_context::CONTEXT.rbatis.clone()
     };
 }
 /// 获取带守卫功能的事务连接
@@ -83,7 +83,7 @@ macro_rules! config_gateway {
     ($servlet_path:expr) => {
         once_cell::sync::Lazy::new(|| {
             let service_name = $servlet_path.to_string();
-            let mut gateway = ddd_dapr::config::CONTEXT
+            let mut gateway = genies_context::CONTEXT
                 .config
                 .gateway
                 .clone()
