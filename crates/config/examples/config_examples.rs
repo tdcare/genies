@@ -1,4 +1,3 @@
-
 use genies_derive::Config;
 use serde::{Deserialize, Serialize};
 
@@ -88,40 +87,37 @@ pub struct EnvArrayConfig {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 打印当前工作目录
-    println!("当前工作目录: {:?}", std::env::current_dir()?);
+    println!("cwd: {:?}", std::env::current_dir()?);
+
     // 1. 基础配置示例
-    let basic_config = BasicConfig::from_sources("crates/genies_config/examples/config/basic.yml")?;
+    let basic_config_path = "crates/config/examples/config/basic.yml";
+    println!("Attempting to read basic config from path: {}", basic_config_path);
+    let basic_config = BasicConfig::from_sources(basic_config_path)?;
     println!("Basic Config: {:?}", basic_config);
 
     // 2. 数组配置示例
-    let array_config = ArrayConfig::from_sources("crates/genies_config/examples/config/array.yml")?;
+    let array_config_path = "crates/config/examples/config/array.yml";
+    println!("Attempting to read array config from path: {}", array_config_path);
+    let array_config = ArrayConfig::from_sources(array_config_path)?;
     println!("Array Config: {:?}", array_config);
 
-    // // 3. 可选值配置示例
-    // 需要在 config.rs 中定义 OptionalConfig 结构体
-    let optional_config = OptionalConfig::from_sources("crates/genies_config/examples/config/optional.yml")?;
+    // 3. 可选值配置示例
+    let optional_config_path = "crates/config/examples/config/optional.yml";
+    println!("Attempting to read optional config from path: {}", optional_config_path);
+    let optional_config = OptionalConfig::from_sources(optional_config_path)?;
     println!("Optional Config: {:?}", optional_config);
 
     // 4. 复杂配置示例
-    // 需要在 config.rs 中定义 ComplexConfig 结构体
-    let complex_config = ComplexConfig::from_sources("crates/genies_config/examples/config/complex.yml")?;
+    let complex_config_path = "crates/config/examples/config/complex.yml";
+    println!("Attempting to read complex config from path: {}", complex_config_path);
+    let complex_config = ComplexConfig::from_sources(complex_config_path)?;
     println!("Complex Config: {:?}", complex_config);
 
     // 环境变量数组功能示例
-    // 运行前请设置环境变量：
-    // Windows PowerShell:
-    //   $env:TOPICS="env_topic1,env_topic2"
-    //   $env:NUMBERS="10,20,30"
-    // Linux/Mac:
-    //   export TOPICS="env_topic1,env_topic2"
-    //   export NUMBERS="10,20,30"
-    let env_array_config = EnvArrayConfig::from_sources("crates/genies_config/examples/config/array.yml")?;
+    let env_array_config_path = "crates/config/examples/config/array.yml";
+    println!("Attempting to read env array config from path: {}", env_array_config_path);
+    let env_array_config = EnvArrayConfig::from_sources(env_array_config_path)?;
     println!("EnvArrayConfig (from env): {:?}", env_array_config);
-
-    // // 5. 配置热重载示例
-    // let mut config = config::ComplexConfig::from_sources("config/complex.yml")?;
-    // config.reload().await?;
 
     Ok(())
 }
