@@ -101,17 +101,7 @@ impl ApplicationContext {
 }
 impl Default for ApplicationContext {
     fn default() -> Self {
-        let  config = ApplicationConfig::default();
-        ApplicationContext {
-            keycloak_keys: futures::executor::block_on(async {
-                get_keycloak_keys(&config.keycloak_auth_server_url, &config.keycloak_realm).await
-            }),
-
-            rbatis:  RBatis::new(),
-            cache_service: CacheService::new(&config),
-            redis_save_service: CacheService::new_saved(&config),
-            config,
-        }
+           Self::new()             
     }
 }
 //
