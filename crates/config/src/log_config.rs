@@ -1,5 +1,5 @@
 
-use  genies_derive::Config;
+use  genies_derive::ConfigCore;
 
 
 /// 日志级别

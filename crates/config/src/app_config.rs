@@ -1,4 +1,4 @@
-use  genies_derive::Config;
+use  genies_derive::ConfigCore;
 
 ///服务启动配置
 #[derive(ConfigCore,Debug,serde::Deserialize)]
