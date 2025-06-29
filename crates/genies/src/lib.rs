@@ -46,7 +46,7 @@ macro_rules! tx_defer {
             .await
             .unwrap()
             .defer_async(|mut tx| async move {
-                if !tx.done {
+                if !tx.done() {
                     tx.rollback().await;
                     log::warn!("tx 没有手动commit 自动执行 rollback，请检查代码！");
                 } else {
@@ -60,7 +60,7 @@ macro_rules! tx_defer {
             .await
             .unwrap()
             .defer_async(|mut tx| async move {
-                if !tx.done {
+                if !tx.done() {
                     tx.rollback().await;
                     log::warn!("tx 没有手动commit 自动执行 rollback，请检查代码！");
                 } else {
