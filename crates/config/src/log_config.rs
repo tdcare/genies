@@ -10,7 +10,7 @@ pub struct LogConfig {
 
 pub fn init_log() {
 
-    let env_filter_config=LogConfig::default().log_level;
+    let env_filter_config=LogConfig::from_sources("./application.yml").unwrap().log_level;
 
     tracing_subscriber::fmt()
         // .with_max_level(LevelFilter::DEBUG)
