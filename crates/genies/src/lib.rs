@@ -12,7 +12,7 @@
 
 // #[macro_use]
 extern crate rbatis;
-extern crate rbdc;
+extern crate rbdc ;
 
 
 
@@ -34,7 +34,7 @@ pub use genies_k8s::*;
 #[macro_export]
 macro_rules! pool {
     () => {
-        &mut genies_context::CONTEXT.rbatis.clone()
+        &mut genies::CONTEXT.rbatis.clone()
     };
 }
 /// 获取带守卫功能的事务连接
@@ -83,7 +83,7 @@ macro_rules! config_gateway {
     ($servlet_path:expr) => {
         once_cell::sync::Lazy::new(|| {
             let service_name = $servlet_path.to_string();
-            let mut gateway = genies_context::CONTEXT
+            let mut gateway = genies::CONTEXT
                 .config
                 .gateway
                 .clone()
