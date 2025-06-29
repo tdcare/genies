@@ -1,9 +1,9 @@
-use genies_derive::Config;
+use genies_derive::ConfigCore;
 use serde::{Deserialize, Serialize};
 
 
 /// 基础配置示例
-#[derive(Config, Debug, Deserialize, Serialize)]
+#[derive(ConfigCore, Debug, Deserialize, Serialize)]
 pub struct BasicConfig {
     // 基本类型，带默认值
     #[config(default = "localhost")]
@@ -18,7 +18,7 @@ pub struct BasicConfig {
 }
 
 /// 数组配置示例
-#[derive(Config, Debug, Deserialize, Serialize)]
+#[derive(ConfigCore, Debug, Deserialize, Serialize)]
 pub struct ArrayConfig {
     // 字符串数组，带默认值
     #[config(default = "topic1,topic2,topic3")]
@@ -34,7 +34,7 @@ pub struct ArrayConfig {
 }
 
 /// 可选值配置示例
-#[derive(Config, Debug, Deserialize, Serialize)]
+#[derive(ConfigCore, Debug, Deserialize, Serialize)]
 pub struct OptionalConfig {
     // 可选字符串，带默认值
     #[config(default = "guest")]
@@ -50,13 +50,13 @@ pub struct OptionalConfig {
 }
 
 /// 复杂配置示例
-#[derive(Config, Debug, Deserialize, Serialize)]
+#[derive(ConfigCore, Debug, Deserialize, Serialize)]
 pub struct ComplexConfig {
     // 必填基本配置
     #[config(default = "my-app")]
     pub app_name: String,
     
-    #[config(default = "development")]
+    #[config(default = "development")]  
     pub environment: String,
     
     // 可选数组
@@ -76,7 +76,7 @@ pub struct ComplexConfig {
 }
 
 /// 环境变量数组功能示例
-#[derive(Config, Debug, Deserialize, Serialize)]
+#[derive(ConfigCore, Debug, Deserialize, Serialize)]
 pub struct EnvArrayConfig {
     #[config(default = "default1,default2")]
     pub topics: Vec<String>,
