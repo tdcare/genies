@@ -85,8 +85,9 @@ impl ApplicationContext {
     }
 
     pub fn new() -> Self {
-        let config = ApplicationConfig::from_sources("application.yml").unwrap();
-        
+        let config = ApplicationConfig::from_sources("./application.yml").unwrap();
+        log::debug!("config = {:?}", config);
+       
         ApplicationContext {
             keycloak_keys: futures::executor::block_on(async {
                 get_keycloak_keys(&config.keycloak_auth_server_url, &config.keycloak_realm).await
