@@ -115,7 +115,7 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
     let is_async = target_fn.sig.asyncness.is_some();
     if !is_async {
         panic!(
-            "[ddd_dapr] #[topic] 'fn {}({})' must be  async fn! ",
+            "[genies] #[topic] 'fn {}({})' must be  async fn! ",
             func_name_ident, func_args_stream
         );
     }
@@ -129,10 +129,10 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
     let wrap_url = format!("/daprsub/consumers").to_lowercase();
 
     let dapr_config_wrap_code = quote! {
-        pub  fn #dapr_config_wrap_fn() -> ddd_dapr::pubsub::DaprTopicSubscription{
+        pub  fn #dapr_config_wrap_fn() -> genies_dapr::pubsub::DaprTopicSubscription{
             use std::collections::HashMap;
             #metadata_hash_map
-           let dapr_topic_subscription = ddd_dapr::pubsub::DaprTopicSubscription {
+           let dapr_topic_subscription = genies_dapr::pubsub::DaprTopicSubscription {
                     pubsub_name: Some(#pubsub_name.to_string()),
                     topic: Some(#topic_ident),
                     route: Some(#wrap_url.to_string()),
@@ -153,7 +153,7 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
          #[handler]
          pub async fn #m_salvo_wrap(_req: &mut Request, _depot: &mut Depot, _res: &mut Response){
             use std::time::Duration;
-            use ddd_dapr::event::DomainEvent;
+            use genies_dapr::event::DomainEvent;
            // use ddd_dapr::cloud_event::CloudEvent;
             let CONSUME_STATUS_CONSUMING: String = "CONSUMING".to_string();
             let CONSUME_STATUS_CONSUMED: String = "CONSUMED".to_string();
@@ -167,14 +167,14 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
             log::debug!("原始:{}",body);
 
 
-            let processing_expire_seconds = ddd_dapr::config::CONTEXT.config.processing_expire_seconds as u64;
-            let record_reserve_minutes = ddd_dapr::config::CONTEXT.config.record_reserve_minutes as u64;
+            let processing_expire_seconds = genies_context::CONTEXT.config.processing_expire_seconds as u64;
+            let record_reserve_minutes = genies_context::CONTEXT.config.record_reserve_minutes as u64;
 
-            let cloud_event: ddd_dapr::dapr::cloud_event::CloudEvent = serde_json::from_str(&body).unwrap_or_default();
+            let cloud_event: genies_dapr::cloud_event::CloudEvent = serde_json::from_str(&body).unwrap_or_default();
             //let cloud_event =_req.parse_json::<ddd_dapr::dapr::cloud_event::CloudEvent>().await.unwrap_or_default();
 
             log::debug!("{:?}",cloud_event);
-            let message_imp: ddd_dapr::message::MessageImpl = serde_json::from_value(cloud_event.data).unwrap_or_default();
+            let message_imp: genies_ddd::message::MessageImpl = serde_json::from_value(cloud_event.data).unwrap_or_default();
 
             let payload = message_imp.payload;
             let headers = message_imp.headers;
@@ -189,7 +189,7 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
                 let event: #event_ty_ident = serde_json::from_str(&payload).unwrap();
                 log::debug!("匹配到事件类型，事件对象为:{:?}", event);
 
-                let mut tx = ddd_dapr::config::CONTEXT
+                let mut tx = genies_context::CONTEXT
                                 .rbatis
                                 .acquire_begin()
                                 .await
@@ -210,10 +210,10 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
                                 });
 
                 let hander_name=#func_name;
-                let server_name=ddd_dapr::config::CONTEXT.config.server_name.clone();
+                let server_name=genies_context::CONTEXT.config.server_name.clone();
                 let event_type_name=#event_ty_name;
                 let key = format!("{}-{}-{}-{}",server_name,hander_name,event_type_name, headers.ID.clone().unwrap());
-                let v = ddd_dapr::config::CONTEXT.redis_save_service.get_string(&key).await.unwrap();
+                let v = genies_context::CONTEXT.redis_save_service.get_string(&key).await.unwrap();
                 log::debug!("当前事件redis key = {},当前事件的状态 value={:?}",key,v);
                 if v.eq(&CONSUME_STATUS_CONSUMING) {
                         tx.rollback().await;
@@ -223,7 +223,7 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
                         tx.rollback().await;
                         log::debug!("2事件已完成,key={}",key);
                     }else {
-                        let set_CONSUMING = ddd_dapr::config::CONTEXT
+                        let set_CONSUMING = genies_context::CONTEXT
                             .redis_save_service
                             .set_string_ex(
                                 &key,
@@ -239,7 +239,7 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
                             if event_handle.is_ok() {
                                 log::debug!("4事件处理程序处理成功,key={}",key);
 
-                                let set_CONSUMED = ddd_dapr::config::CONTEXT
+                                let set_CONSUMED = genies_context::CONTEXT
                                     .redis_save_service
                                     .set_string_ex(
                                         &key,
@@ -259,14 +259,14 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
                             }else {
                                 // 如果事件处理程序处理失败
                                 tx.rollback().await;
-                                ddd_dapr::config::CONTEXT.redis_save_service.del_string(&key).await;
+                                genies_context::CONTEXT.redis_save_service.del_string(&key).await;
                                 _depot.insert("is_retry", "true");
                             }
                         }else {
                             // 如果初次在 redis 中设置事件状态失败
                             log::debug!("设置redis 出错，消息重试");
                             tx.rollback().await;
-                            ddd_dapr::config::CONTEXT.redis_save_service.del_string(&key).await;
+                            genies_context::CONTEXT.redis_save_service.del_string(&key).await;
                             _depot.insert("is_retry", "true");
                         }
                     }

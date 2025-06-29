@@ -26,6 +26,7 @@ pub fn find_struct_field<'a>(name: &str, fields: &'a Fields) -> Option<&'a Field
         Fields::Named(named_fields) => find_named_field(name, named_fields),
         Fields::Unnamed(_) => None,
         Fields::Unit => None,
+        Fields::Unit => None,
     }
 }
 
