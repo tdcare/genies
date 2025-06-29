@@ -1,7 +1,7 @@
 use  genies_derive::Config;
 
 ///服务启动配置
-#[derive(Config,Debug,serde::Deserialize)]
+#[derive(ConfigCore,Debug,serde::Deserialize)]
 pub struct ApplicationConfig {
     pub debug: bool,
     pub server_name:String,

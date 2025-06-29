@@ -12,7 +12,7 @@ repository = "https://github.com/tdcare/genies"
 [workspace.dependencies]
 genies = {version = "1.2.0", path = "crates/genies" }
 genies_core = {version ="1.2.0", path = "crates/core" }
-genies_derive = {version = "1.2.0", path = "crates/genies_derive" }
+genies_derive = {version = "1.2.1", path = "crates/genies_derive" }
 genies_config = {version = "1.2.0", path = "crates/config" }
 genies_context = {version = "1.2.0", path = "crates/context" }
 genies_cache = {version ="1.2.0", path = "crates/cache" }

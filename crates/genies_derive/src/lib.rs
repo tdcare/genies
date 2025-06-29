@@ -119,3 +119,27 @@ pub fn derive_config(input: TokenStream) -> TokenStream {
 
 }
 
+#[proc_macro_derive(ConfigCore, attributes(config))]
+pub fn derive_config_core(input: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(input as DeriveInput);
+
+
+    let stream=  derive_config_core_type_for_struct(&ast);
+ 
+    #[cfg(feature = "debug_mode")]
+        if cfg!(debug_assertions){
+            use rust_format::{Formatter, RustFmt};
+            let code = RustFmt::default().format_str(stream.to_string()).unwrap();
+            println!(
+                "............gen macro ConfigCore :\n {}",
+                code
+            );
+            println!("............gen macro ConfigCore end............");
+        }
+
+    return stream;
+
+
+
+}
+

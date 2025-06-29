@@ -3,7 +3,7 @@ use  genies_derive::Config;
 
 
 /// 日志级别
-#[derive(Config,Debug,serde::Deserialize)]
+#[derive(ConfigCore,Debug,serde::Deserialize)]
 pub struct LogConfig {
     pub log_level:String,
 }

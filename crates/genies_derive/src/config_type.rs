@@ -4,6 +4,110 @@ use proc_macro2::*;
 use crate::proc_macro::TokenStream;
 use convert_case::{Case, Casing};
 
+
+pub fn derive_config_core_type_for_struct(ast: &DeriveInput) -> TokenStream {
+
+    let name = &ast.ident;
+
+    let fields = if let Data::Struct(DataStruct { fields: Fields::Named(ref fields), .. }) = ast.data {
+        &fields.named
+    } else {
+        panic!("Config can only be derived for structs with named fields");
+    };
+
+    let mut default_values = Vec::new();
+    let mut env_parse_code = Vec::new();
+    let mut merge_code = Vec::new();
+
+    for field in fields.iter() {
+        let field_name = &field.ident;
+        let field_type = &field.ty;
+        let env_name = field_name.as_ref().unwrap().to_string().to_case(Case::ScreamingSnake);
+
+        // 解析 #[config(default = "...")]
+        let mut default_value = quote! { Default::default() };
+        for attr in &field.attrs {
+            if attr.path.is_ident("config") {
+                if let Ok(meta) = attr.parse_meta() {
+                    if let syn::Meta::List(meta_list) = meta {
+                        for nested_meta in meta_list.nested {
+                            if let syn::NestedMeta::Meta(syn::Meta::NameValue(name_value)) = nested_meta {
+                                if name_value.path.is_ident("default") {
+                                    if let syn::Lit::Str(lit_str) = &name_value.lit {
+                                        let val = lit_str.value();
+                                        default_value = generate_default_value(field_type, &val);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        default_values.push(quote! { #field_name: #default_value });
+
+        // 生成环境变量解析代码
+        env_parse_code.push(generate_env_parse_code(field_name, field_type, &env_name));
+        // 生成 merge 代码
+        merge_code.push(quote! { self.#field_name = other.#field_name; });
+    }
+
+    let expanded = quote! {
+        impl #name {
+            pub fn validate(&self) -> Result<(), genies_core::error::ConfigError> {
+                Ok(())
+            }
+
+            pub fn from_file(path: &str) -> Result<Self, genies_core::error::ConfigError> {
+                let contents = std::fs::read_to_string(path)
+                    .map_err(|e| genies_core::error::ConfigError::FileError(format!("Failed to read config file: {}", e)))?;
+                serde_yaml::from_str(&contents)
+                    .map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse config file: {}", e)))
+            }
+
+            pub fn from_sources(file_path: &str) -> Result<Self, genies_core::error::ConfigError> {
+                let mut config = Self::default();
+                if let Ok(contents) = std::fs::read_to_string(file_path) {
+                    match serde_yaml::from_str::<Self>(&contents) {
+                        Ok(file_config) => {
+                            config.merge(file_config);
+                            log::info!("Loaded config from file: {}", file_path);
+                        }
+                    Err(e) => {
+                            log::warn!("Failed to parse config file {}: {}, using defaults", file_path, e);
+                        }
+                    }
+                } else {
+                    log::warn!("Config file not found: {}, using defaults", file_path);
+                }
+                config.load_env()?;
+                config.validate()?;
+                Ok(config)
+            }
+
+            pub fn merge(&mut self, other: Self) {
+                #(#merge_code)*
+            }
+
+            pub fn load_env(&mut self) -> Result<(), genies_core::error::ConfigError> {
+                #(#env_parse_code)*
+                Ok(())
+            }
+        }
+
+        impl Default for #name {
+            fn default() -> Self {
+                Self {
+                    #(#default_values,)*
+                }
+            }
+        }
+    };
+
+    TokenStream::from(expanded)
+}
+
+
 pub fn derive_config_type_for_struct(ast: &DeriveInput) -> TokenStream {
 
     let name = &ast.ident;
