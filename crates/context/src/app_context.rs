@@ -52,7 +52,7 @@ impl ApplicationContext {
             self.config.database_url
         );
 
-        let _=  self.rbatis.init(rbdc_mysql::driver::MysqlDriver {}, self.config.database_url).unwrap();
+        let _=  self.rbatis.init(rbdc_mysql::driver::MysqlDriver {}, &self.config.database_url).unwrap();
 
         let _ = self.rbatis.get_pool().unwrap().set_max_open_conns(self.config.max_connections as u64);
         let _ = self.rbatis.get_pool().unwrap().set_max_idle_conns(self.config.wait_timeout as u64);
