@@ -45,13 +45,14 @@ pub struct ApplicationContext {
 }
 impl ApplicationContext {
     /// init database pool
-    pub async fn init_pool(&self) {
+    pub async fn init_mysql(&self) {
         //连接数据库
         log::debug!(
-            "rbatis pool init ({})...",
+            "rbatis mysql init ({})...",
             self.config.database_url
         );
 
+        let _=  self.rbatis.init(rbdc_mysql::driver::MysqlDriver {}, self.config.database_url).unwrap();
 
         let _ = self.rbatis.get_pool().unwrap().set_max_open_conns(self.config.max_connections as u64);
         let _ = self.rbatis.get_pool().unwrap().set_max_idle_conns(self.config.wait_timeout as u64);
@@ -59,7 +60,7 @@ impl ApplicationContext {
 
         let _ = self.rbatis.get_pool().unwrap().get().await;
 
-        log::info!("rbatis pool init success! pool state = {:?}",
+        log::info!("rbatis mysql init success! pool state = {:?}",
                  self.rbatis.get_pool().expect("pool not init!").state().await
             );
 
