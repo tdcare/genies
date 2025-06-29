@@ -24,7 +24,7 @@ pub fn derive_aggregate_type_for_struct(
     let mut output = quote! {
         #[allow(unused_qualifications, unused_parens)]
         #[automatically_derived]
-        impl #impl_generics genies_ddd::aggregate::AggregateType for #tname #ty_generics #where_clause {
+        impl #impl_generics genies::aggregate::AggregateType for #tname #ty_generics #where_clause {
             fn aggregate_type(&self) ->String {
                 #aggtype.to_string()
             }
@@ -48,7 +48,7 @@ pub fn derive_aggregate_type_for_struct(
             output.extend(quote! {
                 #[allow(unused_qualifications, unused_parens)]
                 #[automatically_derived]
-                impl #impl_generics genies_ddd::aggregate::WithAggregateId for #tname #ty_generics #where_clause {
+                impl #impl_generics genies::aggregate::WithAggregateId for #tname #ty_generics #where_clause {
                     type Id = #idftype;
                     fn aggregate_id(&self) -> &Self::Id {
                         &self.#idfname
@@ -65,7 +65,7 @@ pub fn derive_aggregate_type_for_struct(
                         output.extend(quote! {
                             #[allow(unused_qualifications, unused_parens)]
                             #[automatically_derived]
-                            impl #impl_generics genies_ddd::aggregate::InitializeAggregate for #tname #ty_generics #where_clause {
+                            impl #impl_generics genies::aggregate::InitializeAggregate for #tname #ty_generics #where_clause {
                                 type State = Self;
                                 fn initialize(aggregate_id: #idftype) -> Self::State {
                                     Self {

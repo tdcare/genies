@@ -53,18 +53,18 @@ pub fn derive_config_type_for_struct(ast: &DeriveInput) -> TokenStream {
 
     let expanded = quote! {
         impl #name {
-            pub fn validate(&self) -> Result<(), genies_core::error::ConfigError> {
+            pub fn validate(&self) -> Result<(), genies::error::ConfigError> {
                 Ok(())
             }
 
-            pub fn from_file(path: &str) -> Result<Self, genies_core::error::ConfigError> {
+            pub fn from_file(path: &str) -> Result<Self, genies::error::ConfigError> {
                 let contents = std::fs::read_to_string(path)
-                    .map_err(|e| genies_core::error::ConfigError::FileError(format!("Failed to read config file: {}", e)))?;
+                    .map_err(|e| genies::error::ConfigError::FileError(format!("Failed to read config file: {}", e)))?;
                 serde_yaml::from_str(&contents)
-                    .map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse config file: {}", e)))
+                    .map_err(|e| genies::error::ConfigError::ParseError(format!("Failed to parse config file: {}", e)))
             }
 
-            pub fn from_sources(file_path: &str) -> Result<Self, genies_core::error::ConfigError> {
+            pub fn from_sources(file_path: &str) -> Result<Self, genies::error::ConfigError> {
                 let mut config = Self::default();
                 if let Ok(contents) = std::fs::read_to_string(file_path) {
                     match serde_yaml::from_str::<Self>(&contents) {
@@ -88,7 +88,7 @@ pub fn derive_config_type_for_struct(ast: &DeriveInput) -> TokenStream {
                 #(#merge_code)*
             }
 
-            pub fn load_env(&mut self) -> Result<(), genies_core::error::ConfigError> {
+            pub fn load_env(&mut self) -> Result<(), genies::error::ConfigError> {
                 #(#env_parse_code)*
                 Ok(())
             }
@@ -154,7 +154,7 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
                                                     } else {
                     Some(
                         value.split(',')
-                            .map(|s| s.trim().parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Option<Vec>: {}", e))))
+                            .map(|s| s.trim().parse::<#inner>().map_err(|e| genies::error::ConfigError::ParseError(format!("Failed to parse Option<Vec>: {}", e))))
                             .collect::<Result<Vec<#inner>, _>>()?
                     )
                 };
@@ -167,7 +167,7 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
                 self.#field = if value.trim().is_empty() {
                     None
                                                     } else {
-                    Some(value.parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Option: {}", e)))?)
+                    Some(value.parse::<#inner>().map_err(|e| genies::error::ConfigError::ParseError(format!("Failed to parse Option: {}", e)))?)
                 };
             }
         }
@@ -179,7 +179,7 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
                     Vec::new()
                 } else {
                     value.split(',')
-                        .map(|s| s.trim().parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Vec: {}", e))))
+                        .map(|s| s.trim().parse::<#inner>().map_err(|e| genies::error::ConfigError::ParseError(format!("Failed to parse Vec: {}", e))))
                         .collect::<Result<Vec<#inner>, _>>()?
                 };
             }
@@ -187,7 +187,7 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
     } else {
         quote! {
             if let Ok(value) = std::env::var(#env_name) {
-                self.#field = value.parse().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse: {}", e)))?;
+                self.#field = value.parse().map_err(|e| genies::error::ConfigError::ParseError(format!("Failed to parse: {}", e)))?;
             }
         }
     }

@@ -3,22 +3,22 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "1.1.1"
+version = "1.2.0"
 edition = "2021"
 authors = ["tdcare"]
 license = "MIT"
 repository = "https://github.com/tdcare/genies"
 
 [workspace.dependencies]
-genies = {version = "1.1.5", path = "crates/genies" }
-genies_core = {version ="1.1.2", path = "crates/core" }
-genies_derive = {version = "1.1.1", path = "crates/genies_derive" }
-genies_config = {version = "1.1.2", path = "crates/config" }
-genies_context = {version = "1.1.6", path = "crates/context" }
-genies_cache = {version ="1.1.1", path = "crates/cache" }
-genies_dapr = {version = "1.1.2", path = "crates/dapr" }
-genies_ddd = {version ="1.1.2", path = "crates/ddd" }
-genies_k8s = { version ="1.1.4", path = "crates/k8s" }
+genies = {version = "1.2.0", path = "crates/genies" }
+genies_core = {version ="1.2.0", path = "crates/core" }
+genies_derive = {version = "1.2.0", path = "crates/genies_derive" }
+genies_config = {version = "1.2.0", path = "crates/config" }
+genies_context = {version = "1.2.0", path = "crates/context" }
+genies_cache = {version ="1.2.0", path = "crates/cache" }
+genies_dapr = {version = "1.2.0", path = "crates/dapr" }
+genies_ddd = {version ="1.2.0", path = "crates/ddd" }
+genies_k8s = { version ="1.2.0", path = "crates/k8s" }
 
 
 log = "0.4.17"
