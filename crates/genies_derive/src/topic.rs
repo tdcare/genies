@@ -153,7 +153,7 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
          #[handler]
          pub async fn #m_salvo_wrap(_req: &mut Request, _depot: &mut Depot, _res: &mut Response){
             use std::time::Duration;
-            use genies_dapr::event::DomainEvent;
+            use genies_ddd::event::DomainEvent;
            // use ddd_dapr::cloud_event::CloudEvent;
             let CONSUME_STATUS_CONSUMING: String = "CONSUMING".to_string();
             let CONSUME_STATUS_CONSUMED: String = "CONSUMED".to_string();
