@@ -60,7 +60,7 @@ pub fn derive_event_type_for_enum(ast: &DeriveInput, enum_data: &DataEnum) -> To
     (quote! {
         #[allow(unused_qualifications, unused_parens)]
         #[automatically_derived]
-        impl #impl_generics genies::event::DomainEvent for #tname #ty_generics #where_clause {
+        impl #impl_generics genies::ddd::event::DomainEvent for #tname #ty_generics #where_clause {
             fn event_type_version(&self) -> String {
                 #evversion.to_string()
             }
@@ -96,7 +96,7 @@ pub fn derive_event_type_for_struct(ast: &DeriveInput, _struct_data: &DataStruct
     (quote! {
         #[allow(unused_qualifications, unused_parens)]
         #[automatically_derived]
-        impl #impl_generics genies::event::DomainEvent for #tname #ty_generics #where_clause {
+        impl #impl_generics genies::ddd::event::DomainEvent for #tname #ty_generics #where_clause {
             fn event_type_version(&self) ->String{
                 #evversion.to_string()
             }

@@ -37,6 +37,8 @@ rbatis = {workspace =true} #必选
 rbs = {workspace =true}
 rbdc =  {workspace =true}
 rbdc-mysql= {workspace =true}
+inventory = { workspace = true }
+
 
 [dev-dependencies]
 

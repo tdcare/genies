@@ -11,4 +11,5 @@
  pub mod cloud_event;
  pub mod pubsub;
  pub mod dapr_sub;
+ pub mod topicpoint;
 

@@ -16,7 +16,6 @@ readme = "README.zh-CN.md"
 [dependencies]
 genies_core = { workspace = true }
 genies_derive = { workspace = true }
-genies_config = { workspace = true }
 
 
 serde = {workspace =true}
@@ -28,6 +27,8 @@ log = {workspace =true}
 
 tokio = { workspace = true }
 salvo = {workspace =true}
+inventory = { workspace = true }
+
 
 [dev-dependencies]
 

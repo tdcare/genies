@@ -17,14 +17,14 @@ extern crate rbdc ;
 
 
 
-pub use genies_core::*;
+pub use genies_core as core;
 // pub use genies_derive::*;
-pub use genies_config::*;
-pub use genies_context::*;
-pub use genies_cache::*;
-pub use genies_dapr::*;
-pub use genies_ddd::*;
-pub use genies_k8s::*;
+pub use genies_config as config;
+pub use genies_context as context;
+pub use genies_cache as cache;
+pub use genies_dapr as dapr;
+pub use genies_ddd as ddd ;
+pub use genies_k8s as k8s ;
 
 
 
@@ -117,7 +117,6 @@ mod tests {
         println!("{}", dest);
         assert_eq!(dest, src1);
     }
-
     #[test]
     fn copy_obj() {
         use serde::{Deserialize, Serialize};

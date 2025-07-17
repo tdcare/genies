@@ -2,10 +2,10 @@
 debug: true #true #false
 
 #微服务名称
-server_name: "tdbox-service"
+server_name: "dapr-topic-test"
 
 #微服务的路由前缀，对应 java application.properties 配置文件中的 spring.mvc.servlet.path。
-servlet_path: "/tdbox"
+servlet_path: "/topic"
 
 #server 地址
 server_url: "0.0.0.0:8050"

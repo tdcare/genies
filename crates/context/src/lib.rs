@@ -12,6 +12,11 @@ pub mod app_context;
 pub mod auth;
 
 
+
+pub use inventory;
+
+
+
 use crate::app_context::*;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
