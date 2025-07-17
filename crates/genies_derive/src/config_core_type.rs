@@ -53,7 +53,7 @@ pub fn derive_config_core_type_for_struct(ast: &DeriveInput) -> TokenStream {
 
     let expanded = quote! {
         impl #name {
-            pub fn validate(&self) -> Result<(), genies_core:::error::ConfigError> {
+            pub fn validate(&self) -> Result<(), genies_core::error::ConfigError> {
                 Ok(())
             }
 
