@@ -71,7 +71,7 @@ pub(crate) fn impl_wrapper(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenSt
     // 所以这段代码在编译阶段被展开后，作用于 core-api/remote 目录中函数所在位置的mod 中。
     let wrapper_feignhttp_code = quote! {
         pub async fn #func_name_ident(#func_args) -> #return_ty{
-             let bearer = genies::REMOTE_TOKEN.lock().unwrap().access_token.clone();
+             let bearer = genies::context::REMOTE_TOKEN.lock().unwrap().access_token.clone();
         let bearer = format!("Bearer {}", &bearer);
         let mut feignhttp_return = #feignhttp_ident( &bearer #func_args_do).await;
         return if feignhttp_return.is_ok() {
@@ -79,13 +79,13 @@ pub(crate) fn impl_wrapper(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenSt
         } else {
             let err = feignhttp_return.as_ref().err().unwrap();
             if err.to_string().contains("401 Unauthorized") {
-                let remote_token_new = genies::jwt::get_temp_access_token(
-                    &genies::CONTEXT.config.keycloak_auth_server_url,
-                    &genies::CONTEXT.config.keycloak_realm,
-                    &genies::CONTEXT.config.keycloak_resource,
-                    &genies::CONTEXT.config.keycloak_credentials_secret,
+                let remote_token_new = genies::core::jwt::get_temp_access_token(
+                    &genies::context::CONTEXT.config.keycloak_auth_server_url,
+                    &genies::context::CONTEXT.config.keycloak_realm,
+                    &genies::context::CONTEXT.config.keycloak_resource,
+                    &genies::context::CONTEXT.config.keycloak_credentials_secret,
                 ).await;
-                genies::REMOTE_TOKEN.lock().unwrap().access_token = remote_token_new.clone();
+                genies::context::REMOTE_TOKEN.lock().unwrap().access_token = remote_token_new.clone();
                 let bearer = format!("Bearer {}", &remote_token_new);
                 feignhttp_return =  #feignhttp_ident( &bearer #func_args_do).await;
             }
