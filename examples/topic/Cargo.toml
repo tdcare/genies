@@ -1,0 +1,27 @@
+[package]
+name = "topic"
+version.workspace = true
+edition.workspace = true
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+
+[dependencies]
+genies = { workspace = true }
+genies_derive = { workspace = true }
+rbatis={workspace = true}
+salvo={workspace = true,features = []}
+
+serde = {workspace =true}
+serde_json = {workspace =true}
+serde_yaml = {workspace =true}
+
+log = {workspace =true}
+
+
+tokio = { workspace = true }
+
+redis = {version = "0.22.1", features = ["async-std-comp"] }
+async-trait = {workspace = true}
+anyhow = "1.0.98"
