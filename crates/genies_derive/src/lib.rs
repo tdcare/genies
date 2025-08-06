@@ -1,19 +1,18 @@
-
 extern crate proc_macro;
 
-
 mod aggregate_type;
-mod event_type;
-mod config_type;
+mod casbin;
 mod config_core_type;
+mod config_type;
+mod enu;
+mod event_type;
 mod helpers;
 mod topic;
 mod wrapper;
-mod enu;
-
 
 use proc_macro::TokenStream;
-use syn::{parse_macro_input, DeriveInput, Data, Fields, DataStruct, Attribute, Type};
+use quote::{format_ident, quote};
+use syn::{parse_macro_input, Attribute, Data, DataStruct, DeriveInput, Fields, Type};
 
 use crate::topic::*;
 use syn::*;
@@ -26,8 +25,9 @@ use crate::event_type::{
     derive_event_type_for_enum, derive_event_type_for_struct, derive_event_type_for_union,
 };
 
-use crate::config_type::{derive_config_type_for_struct};
-use crate::config_core_type::{derive_config_core_type_for_struct};
+use crate::casbin::{impl_casbin};
+use crate::config_core_type::derive_config_core_type_for_struct;
+use crate::config_type::derive_config_type_for_struct;
 use crate::wrapper::impl_wrapper;
 /// 对领域事件进行标记
 #[proc_macro_derive(DomainEvent, attributes(event_type, event_type_version, event_source))]
@@ -54,7 +54,6 @@ pub fn derive_aggregate_type(input: TokenStream) -> TokenStream {
     }
 }
 
-
 /// 事件消费宏
 #[proc_macro_attribute]
 pub fn topic(args: TokenStream, func: TokenStream) -> TokenStream {
@@ -62,15 +61,12 @@ pub fn topic(args: TokenStream, func: TokenStream) -> TokenStream {
     let target_fn: ItemFn = syn::parse(func).unwrap();
     let stream = impl_topic(&target_fn, &args);
     #[cfg(feature = "debug_mode")]
-        if cfg!(debug_assertions){
-            use rust_format::{Formatter, RustFmt};
-            let code = RustFmt::default().format_str(stream.to_string()).unwrap();
-            println!(
-                "............gen macro topic :\n {}",
-                code
-            );
-            println!("............gen macro topic end............");
-        }
+    if cfg!(debug_assertions) {
+        use rust_format::{Formatter, RustFmt};
+        let code = RustFmt::default().format_str(stream.to_string()).unwrap();
+        println!("............gen macro topic :\n {}", code);
+        println!("............gen macro topic end............");
+    }
 
     return stream;
 }
@@ -82,66 +78,63 @@ pub fn wrapper(args: TokenStream, func: TokenStream) -> TokenStream {
     let target_fn: ItemFn = syn::parse(func).unwrap();
     let stream = impl_wrapper(&target_fn, &args);
     #[cfg(feature = "debug_mode")]
-       if cfg!(debug_assertions) {
-            use rust_format::{Formatter, RustFmt};
-            let code = RustFmt::default().format_str(stream.to_string()).unwrap();
-            println!(
-                "............gen macro wrapper :\n {}",
-                code
-            );
-            println!("............gen macro wrapper end............");
-        }
+    if cfg!(debug_assertions) {
+        use rust_format::{Formatter, RustFmt};
+        let code = RustFmt::default().format_str(stream.to_string()).unwrap();
+        println!("............gen macro wrapper :\n {}", code);
+        println!("............gen macro wrapper end............");
+    }
 
     return stream;
 }
 
-
-
 #[proc_macro_derive(Config, attributes(config))]
 pub fn derive_config(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
-  
 
-    let stream=  derive_config_type_for_struct(&ast);
- 
+    let stream = derive_config_type_for_struct(&ast);
+
     #[cfg(feature = "debug_mode")]
-        if cfg!(debug_assertions){
-            use rust_format::{Formatter, RustFmt};
-            let code = RustFmt::default().format_str(stream.to_string()).unwrap();
-            println!(
-                "............gen macro Config :\n {}",
-                code
-            );
-            println!("............gen macro Config end............");
-        }
+    if cfg!(debug_assertions) {
+        use rust_format::{Formatter, RustFmt};
+        let code = RustFmt::default().format_str(stream.to_string()).unwrap();
+        println!("............gen macro Config :\n {}", code);
+        println!("............gen macro Config end............");
+    }
 
     return stream;
-
-
-
 }
 
 #[proc_macro_derive(ConfigCore, attributes(config))]
 pub fn derive_config_core(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
 
+    let stream = derive_config_core_type_for_struct(&ast);
 
-    let stream=  derive_config_core_type_for_struct(&ast);
- 
     #[cfg(feature = "debug_mode")]
-        if cfg!(debug_assertions){
-            use rust_format::{Formatter, RustFmt};
-            let code = RustFmt::default().format_str(stream.to_string()).unwrap();
-            println!(
-                "............gen macro ConfigCore :\n {}",
-                code
-            );
-            println!("............gen macro ConfigCore end............");
-        }
+    if cfg!(debug_assertions) {
+        use rust_format::{Formatter, RustFmt};
+        let code = RustFmt::default().format_str(stream.to_string()).unwrap();
+        println!("............gen macro ConfigCore :\n {}", code);
+        println!("............gen macro ConfigCore end............");
+    }
 
     return stream;
-
-
-
 }
 
+/// 用casbin实现动态字段授权
+/// 在定义时 #[casbin] 需要放在最前边
+#[proc_macro_attribute]
+pub fn casbin(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut input = parse_macro_input!(item as DeriveInput);
+    let stream = impl_casbin(&mut input);
+    #[cfg(feature = "debug_mode")]
+    if cfg!(debug_assertions) {
+        use rust_format::{Formatter, RustFmt};
+        let code = RustFmt::default().format_str(stream.to_string()).unwrap();
+        println!("............gen macro casbin :\n {}", code);
+        println!("............gen macro casbin end............");
+    }
+
+    stream
+}

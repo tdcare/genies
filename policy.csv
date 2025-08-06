@@ -1,0 +1,5 @@
+p, user:admin, credit_card, read, allow
+p, user:admin, phone, read, allow
+p, user:staff, email, read, allow
+p, user:staff, phone, read, allow
+p, user:guest, name, read, allow

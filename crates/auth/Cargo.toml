@@ -1,0 +1,44 @@
+[package]
+name = "genies_auth"
+# version.workspace = true
+version = "1.4.2"
+authors = ["tdcare"]
+edition = "2021"
+license = "MIT/Apache-2.0"
+description = "整合DDD与Dapr 的 context 库"
+keywords = ["dominevent", "aggregate", "ddd","dapr"]
+categories = ["config", "rust-patterns"]
+documentation = "https://docs.rs/genies_context"
+readme = "README.zh-CN.md"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+
+[dependencies]
+genies_core = { workspace = true }
+genies_derive = { workspace = true }
+genies_config = { workspace = true }
+genies_cache = { workspace = true }
+
+serde = {workspace =true}
+serde_yaml = {workspace =true}
+
+log = {workspace =true}
+
+
+tokio = { workspace = true }
+
+lazy_static = "1.4.0"
+futures = "0.3.25"
+
+
+salvo = {workspace =true,features = ["affix-state"]}
+
+rbatis = {workspace =true} #必选
+rbs = {workspace =true}
+rbdc =  {workspace =true}
+rbdc-mysql= {workspace =true}
+
+casbin = { version = "2.10.1", features = ["runtime-tokio"] }
+
+[dev-dependencies]
+

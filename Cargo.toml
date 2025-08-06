@@ -41,7 +41,7 @@ tokio = { version = "1.22.0", features = ["full"] }
 
 
 
-salvo = { version = "0.79.0", features = ["websocket","rustls","oapi"] } #必选
+salvo = { version = "0.79.0", features = ["websocket","rustls","oapi","affix-state"] } #必选
 async-trait = "0.1.59"
 
 inventory = "0.3"
