@@ -87,7 +87,7 @@ pub fn wrapper(args: TokenStream, func: TokenStream) -> TokenStream {
 
     return stream;
 }
-
+/// 从配置文件、环境变量中读取配置参数
 #[proc_macro_derive(Config, attributes(config))]
 pub fn derive_config(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -104,7 +104,7 @@ pub fn derive_config(input: TokenStream) -> TokenStream {
 
     return stream;
 }
-
+/// 功能和Config 一样，用于框架内部使用，防止组件循环依赖
 #[proc_macro_derive(ConfigCore, attributes(config))]
 pub fn derive_config_core(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);

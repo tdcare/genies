@@ -33,7 +33,6 @@ async fn get_user(req: &mut Request, res: &mut Response, depot: &mut Depot) ->Js
     let user_with_policy = p.with_policy(Arc::clone(&enforcer), user);
 
     // 返回 JSON 响应
-    // res.render(Json(profile_with_policy));
     Json(user_with_policy)
 
 }
