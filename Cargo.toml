@@ -10,8 +10,8 @@ license = "MIT"
 repository = "https://github.com/tdcare/genies"
 
 [workspace.dependencies]
-genies = {version = "1.4.2", path = "crates/genies" }
-genies_core = {version ="1.4.2", path = "crates/core" }
+genies = {version = "1.4.3", path = "crates/genies" }
+genies_core = {version ="1.4.3", path = "crates/core" }
 genies_derive = {version = "1.4.4", path = "crates/genies_derive" }
 genies_config = {version = "1.4.2", path = "crates/config" }
 genies_context = {version = "1.4.2", path = "crates/context" }
