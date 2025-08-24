@@ -249,6 +249,68 @@ where
             message: self.message.clone()
         }
     }
+    /// 创建成功响应
+    ///
+    /// # 参数
+    /// - `message`: 成功消息
+    /// - `data`: 返回数据
+    ///
+    /// # 返回
+    /// 返回包含成功状态的ResultDTO实例
+    ///
+    /// # 示例
+    /// ```rust
+    /// use genies_core::ResultDTO;
+    /// let result = ResultDTO::success("创建成功", "");
+    /// ```
+    pub fn success(message: &str, data: T) -> Self {
+        Self {
+            status: Some(1),
+            message: Some(message.to_string()),
+            data: Some(data),
+        }
+    }
+
+    /// 创建失败响应
+    ///
+    /// # 参数
+    /// - `message`: 错误消息
+    ///
+    /// # 返回
+    /// 返回包含错误状态的ResultDTO实例
+    ///
+    /// # 示例
+    /// ```rust
+    /// use genies_core::ResultDTO;
+    /// let result = ResultDTO::<String>::error("参数不能为空");
+    /// ```
+    pub fn error(message: &str) -> Self {
+        Self {
+            status: Some(0),
+            message: Some(message.to_string()),
+            data: None,
+        }
+    }
+
+    /// 创建简单的成功响应（无数据）
+    ///
+    /// # 返回
+    /// 返回包含成功状态但无数据的ResultDTO实例
+    ///
+    /// # 示例
+    /// ```rust
+    /// use genies_core::ResultDTO;
+    /// let result = ResultDTO::<()>::success_empty("操作完成");
+    /// ```
+    pub fn success_empty(message: &str) -> ResultDTO<()> {
+        ResultDTO {
+            status: Some(1),
+            message: Some(message.to_string()),
+            data: None,
+        }
+    }
+
+
 }
 
 impl<T> ToString for ResultDTO<T>
