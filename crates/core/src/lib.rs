@@ -155,7 +155,7 @@ where
 }
 
 /// 兼容Java返回值
-#[derive(Debug, Serialize, Deserialize, Clone,Default)]
+#[derive(Debug, Serialize, Deserialize, Clone,Default,ToSchema)]
 pub struct ResultDTO<T> {
     pub status: Option<i32>,
     pub message: Option<String>,
@@ -321,4 +321,24 @@ where
         serde_json::to_string(self).unwrap()
     }
 }
-
+//
+// // 为ResultDTO实现ToSchema trait，支持不同类型的T
+// use salvo::oapi::{schema, Components, RefOr, Schema, ToSchema};
+//
+// impl<T> ToSchema for ResultDTO<T>
+// where
+//     T: ToSchema,
+// {
+//
+//     fn to_schema(_components: &mut Components) -> RefOr<Schema> {
+//         schema::empty().into()
+//         use salvo::oapi::schema::*;
+//         Schema::Object(
+//             ObjectBuilder::new()
+//                 .property("status", Object::with_type(Type::Integer))
+//                 .property("message", Object::with_type(Type::String))
+//                 .property("data", T::schema())
+//                 .build()
+//         )
+//     }
+// }
