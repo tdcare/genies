@@ -21,7 +21,7 @@ pub struct RemoteToken {
 
 impl RemoteToken {
    pub fn new() -> Self {
-        let config = ApplicationConfig::default();
+        let config = ApplicationConfig::from_sources("./application.yml").unwrap();
         Self {
             access_token: futures::executor::block_on(async {
                 get_temp_access_token(
