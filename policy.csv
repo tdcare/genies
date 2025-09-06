@@ -1,5 +1,17 @@
-p, user:admin, credit_card, read, allow
-p, user:admin, phone, read, allow
-p, user:staff, email, read, allow
-p, user:staff, phone, read, allow
-p, user:guest, name, read, allow
+
+#p, alice, genies_auth.vo.UserProfile.phone, read,deny
+p, alice, genies_auth.vo.UserProfile.email, read,deny
+
+
+p, bob, genies_auth.vo.User.email, read,allow
+p, bob, genies_auth.vo.UserProfile.email, read,deny
+p, bob, data2, write,deny
+
+
+p, data_group_admin, data_group, read,deny
+g,  alice, data_group_admin
+
+
+g2, genies_auth.vo.UserProfile.credit_card, data_group
+g2, genies_auth.vo.UserProfile.name, data_group
+g2, genies_auth.vo.User.phone, data_group

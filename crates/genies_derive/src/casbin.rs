@@ -56,13 +56,27 @@ pub(crate) fn impl_casbin(input: &mut DeriveInput) -> TokenStream {
                 self
             }
 
-            fn check_permission(&self, field: &str) -> bool {
+           pub fn check_permission(&self, field: &str) -> bool {
                 let name = salvo::oapi::naming::assign_name::<#name>(salvo::oapi::naming::NameRule::Auto);
                 // log::debug!("check_permission: name={},field:{}", name,field);
                 let field_str =format!("{}.{}",name,field);
                 match (&self.enforcer, &self.subject) {
-                    (Some(e), Some(s)) => e.enforce((s, field_str, "read")).unwrap_or(false),
-                    _ => false
+                    (Some(e), Some(s)) =>{
+                      match  e.enforce((s, &field_str, "read")){
+                           Ok(b) =>{
+                                log::debug!("权限检查:sub={},obj={},permission:{}", s,field_str,b);
+                                return b;
+                            },
+                            Err(e)=>{
+                                log::debug!("权限检查--策略文件定义出错:sub={},obj={},permission:{},Err:{}",s, field_str,true,e);
+                                return true;
+                            }
+                        }
+                    },
+                    _ => {
+                         log::debug!("权限检查--没有定义策略文件:obj={},permission:{}",field_str,true);
+                         true
+                    }
                 }
             }
         }
