@@ -106,6 +106,34 @@ impl ICacheService for RedisService {
         }
     }
 
+    /// 原子操作：仅当 key 不存在时设置值并设置过期时间 (SET key value NX EX seconds)
+    /// 返回 true 表示设置成功（key 原本不存在），false 表示设置失败（key 已存在）
+    async fn set_string_ex_nx(&self, k: &str, v: &str, ex: Option<Duration>) -> Result<bool> {
+        let mut conn = self.get_conn().await?;
+        let result: RedisResult<Option<String>> = if ex.is_none() {
+            redis::cmd("SET")
+                .arg(&[k, v, "NX"])
+                .query_async(&mut conn)
+                .await
+        } else {
+            redis::cmd("SET")
+                .arg(&[k, v, "NX", "EX", &ex.unwrap().as_secs().to_string()])
+                .query_async(&mut conn)
+                .await
+        };
+        match result {
+            Ok(v) => {
+                // SET NX 返回 "OK" 表示设置成功，返回 nil 表示 key 已存在
+                Ok(v.is_some())
+            }
+            Err(e) => Err(Error::from(format!(
+                "RedisService set_string_ex_nx({}) fail:{}",
+                k,
+                e.to_string()
+            ))),
+        }
+    }
+
     ///set_string 自动过期
     async fn ttl(&self, k: &str) -> Result<i64> {
         let mut conn = self.get_conn().await?;

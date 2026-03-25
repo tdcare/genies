@@ -213,63 +213,63 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
                 let server_name=genies::context::CONTEXT.config.server_name.clone();
                 let event_type_name=#event_ty_name;
                 let key = format!("{}-{}-{}-{}",server_name,hander_name,event_type_name, headers.ID.clone().unwrap());
-                let v = genies::context::CONTEXT.redis_save_service.get_string(&key).await.unwrap();
-                log::debug!("当前事件redis key = {},当前事件的状态 value={:?}",key,v);
-                if v.eq(&CONSUME_STATUS_CONSUMING) {
-                        tx.rollback().await;
-                        _depot.insert("is_retry", "true");
-                        log::debug!("1事件正在处理中，事件将进行重发，key={}",key);
-                    }else if v.eq(&CONSUME_STATUS_CONSUMED) {
-                        tx.rollback().await;
-                        log::debug!("2事件已完成,key={}",key);
-                    }else {
-                        let set_CONSUMING = genies::context::CONTEXT
+                
+                // 使用原子操作尝试抢占消费权
+                let acquired = genies::context::CONTEXT
+                    .redis_save_service
+                    .set_string_ex_nx(&key, &CONSUME_STATUS_CONSUMING, Some(Duration::new(processing_expire_seconds, 0)))
+                    .await
+                    .unwrap();
+                
+                log::debug!("当前事件redis key = {}, 原子抢占结果 = {}", key, acquired);
+                
+                if acquired {
+                    // 抢到消费权，执行业务处理
+                    log::debug!("3设置事件为正在消费中，开始调用事件处理程序,key={}",key);
+                    let event_handle = #func_name_ident(&mut tx, event).await;
+                    // 如果事件消费成功 设置redis消费 状态为 消费完成
+                    if event_handle.is_ok() {
+                        log::debug!("4事件处理程序处理成功,key={}",key);
+
+                        let set_CONSUMED = genies::context::CONTEXT
                             .redis_save_service
                             .set_string_ex(
                                 &key,
-                                &CONSUME_STATUS_CONSUMING,
-                                Some(Duration::new(processing_expire_seconds, 0)),
+                                &CONSUME_STATUS_CONSUMED,
+                                Some(Duration::new(record_reserve_minutes * 60, 0)),
                             )
                             .await;
 
-                        if set_CONSUMING.is_ok() {
-                            log::debug!("3设置事件为正在消费中，开始调用事件处理程序,key={}",key);
-                            let event_handle = #func_name_ident(&mut tx, event).await;
-                            // 如果事件消费成功 设置redis消费 状态为 消费完成
-                            if event_handle.is_ok() {
-                                log::debug!("4事件处理程序处理成功,key={}",key);
-
-                                let set_CONSUMED = genies::context::CONTEXT
-                                    .redis_save_service
-                                    .set_string_ex(
-                                        &key,
-                                        &CONSUME_STATUS_CONSUMED,
-                                        Some(Duration::new(record_reserve_minutes * 60, 0)),
-                                    )
-                                    .await;
-
-                                // redis 消费状态更新成功了，才提交数据库事务
-                                if set_CONSUMED.is_ok(){
-                                    tx.commit().await;
-                                }else {
-                                    // redis 消费状态更新失败了，数据库事务rollback，让dapr 重发消息
-                                    tx.rollback().await;
-                                   _depot.insert("is_retry", "true");
-                                }
-                            }else {
-                                // 如果事件处理程序处理失败
-                                tx.rollback().await;
-                                genies::context::CONTEXT.redis_save_service.del_string(&key).await;
-                                _depot.insert("is_retry", "true");
-                            }
+                        // redis 消费状态更新成功了，才提交数据库事务
+                        if set_CONSUMED.is_ok(){
+                            tx.commit().await;
                         }else {
-                            // 如果初次在 redis 中设置事件状态失败
-                            log::debug!("设置redis 出错，消息重试");
+                            // redis 消费状态更新失败了，数据库事务rollback，让dapr 重发消息
                             tx.rollback().await;
-                            genies::context::CONTEXT.redis_save_service.del_string(&key).await;
-                            _depot.insert("is_retry", "true");
+                           _depot.insert("is_retry", "true");
                         }
+                    }else {
+                        // 如果事件处理程序处理失败
+                        tx.rollback().await;
+                        genies::context::CONTEXT.redis_save_service.del_string(&key).await;
+                        _depot.insert("is_retry", "true");
                     }
+                } else {
+                    // 没抢到消费权，key 已存在，查看当前状态
+                    let v = genies::context::CONTEXT.redis_save_service.get_string(&key).await.unwrap();
+                    log::debug!("当前事件已被其他实例处理，当前状态 value={:?}", v);
+                    
+                    if v.eq(&CONSUME_STATUS_CONSUMED) {
+                        // 已经消费完成，跳过
+                        tx.rollback().await;
+                        log::debug!("2事件已完成,key={}",key);
+                    } else {
+                        // 正在被其他实例消费中，或其他情况，设置重试
+                        tx.rollback().await;
+                        _depot.insert("is_retry", "true");
+                        log::debug!("1事件正在处理中，事件将进行重发，key={}",key);
+                    }
+                }
                 
             }
         }

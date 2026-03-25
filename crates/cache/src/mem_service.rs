@@ -97,6 +97,22 @@ impl ICacheService for MemService {
             "[mem_service]insert fail!"
         )));
     }
+
+    /// 原子操作：仅当 key 不存在时设置值并设置过期时间
+    /// 返回 true 表示设置成功（key 原本不存在），false 表示设置失败（key 已存在）
+    async fn set_string_ex_nx(&self, k: &str, v: &str, t: Option<Duration>) -> Result<bool> {
+        self.recycling();
+        let mut locked = self.cache.lock()?;
+        // 在锁内完成 check-and-set 原子操作
+        if locked.contains_key(k) {
+            // key 已存在，返回 false
+            return Ok(false);
+        }
+        // key 不存在，设置值
+        let e = t.map(|ex| (Instant::now(), ex));
+        locked.insert(k.to_string(), (v.to_string(), e));
+        Ok(true)
+    }
     async fn set_value(&self, _k: &str, _v: &[u8]) -> Result<String> {
         todo!();
     }

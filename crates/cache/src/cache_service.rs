@@ -24,6 +24,9 @@ pub trait ICacheService: Sync + Send {
     async fn get_string(&self, k: &str) -> Result<String>;
     async fn del_string(&self, k: &str) -> Result<String>;
     async fn set_string_ex(&self, k: &str, v: &str, ex: Option<Duration>) -> Result<String>;
+    /// 原子操作：仅当 key 不存在时设置值并设置过期时间
+    /// 返回 true 表示设置成功（key 原本不存在），false 表示设置失败（key 已存在）
+    async fn set_string_ex_nx(&self, k: &str, v: &str, ex: Option<Duration>) -> Result<bool>;
     async fn set_value(&self, k: &str, v: &[u8]) -> Result<String>;
     async fn get_value(&self, k: &str) -> Result<Vec<u8>>;
     async fn set_value_ex(&self, k: &str, v: &[u8], ex: Option<Duration>) -> Result<String>;
@@ -99,6 +102,12 @@ impl CacheService {
 
     pub async fn set_string_ex(&self, k: &str, v: &str, ex: Option<Duration>) -> Result<String> {
         self.inner.set_string_ex(k, v, ex).await
+    }
+
+    /// 原子操作：仅当 key 不存在时设置值并设置过期时间
+    /// 返回 true 表示设置成功（key 原本不存在），false 表示设置失败（key 已存在）
+    pub async fn set_string_ex_nx(&self, k: &str, v: &str, ex: Option<Duration>) -> Result<bool> {
+        self.inner.set_string_ex_nx(k, v, ex).await
     }
     // pub async fn set_object_use_protobuf<T: Message + Default>(
     //     &self,

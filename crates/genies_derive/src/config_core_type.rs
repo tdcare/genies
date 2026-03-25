@@ -156,7 +156,7 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
                         } else {
                     Some(
                         value.split(',')
-                            .map(|s| s.trim().parse::<#inner>().map_err(|e| genies::core::error::ConfigError::ParseError(format!("Failed to parse Option<Vec>: {}", e))))
+                            .map(|s| s.trim().parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Option<Vec>: {}", e))))
                             .collect::<Result<Vec<#inner>, _>>()?
                     )
                 };
@@ -167,7 +167,7 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
                         } else {
                     Some(
                         value.split(',')
-                            .map(|s| s.trim().parse::<#inner>().map_err(|e| genies::core::error::ConfigError::ParseError(format!("Failed to parse Option<Vec>: {}", e))))
+                            .map(|s| s.trim().parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Option<Vec>: {}", e))))
                             .collect::<Result<Vec<#inner>, _>>()?
                     )
                 };
@@ -180,14 +180,14 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
                 self.#field = if value.trim().is_empty() {
                     None
                        } else {
-                    Some(value.parse::<#inner>().map_err(|e| genies::core::error::ConfigError::ParseError(format!("Failed to parse Option: {}", e)))?)
+                    Some(value.parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Option: {}", e)))?)
                 };
             }
             if let Ok(value) = std::env::var(#env_name_snake) {
                 self.#field = if value.trim().is_empty() {
                     None
                         } else {
-                    Some(value.parse::<#inner>().map_err(|e| genies::core::error::ConfigError::ParseError(format!("Failed to parse Option: {}", e)))?)
+                    Some(value.parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Option: {}", e)))?)
                 };
             }
         }
@@ -199,7 +199,7 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
                     Vec::new()
                 } else {
                     value.split(',')
-                        .map(|s| s.trim().parse::<#inner>().map_err(|e| genies::core::error::ConfigError::ParseError(format!("Failed to parse Vec: {}", e))))
+                        .map(|s| s.trim().parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Vec: {}", e))))
                         .collect::<Result<Vec<#inner>, _>>()?
                 };
             }
@@ -208,7 +208,7 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
                     Vec::new()
                 } else {
                     value.split(',')
-                        .map(|s| s.trim().parse::<#inner>().map_err(|e| genies::core::error::ConfigError::ParseError(format!("Failed to parse Vec: {}", e))))
+                        .map(|s| s.trim().parse::<#inner>().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse Vec: {}", e))))
                         .collect::<Result<Vec<#inner>, _>>()?
                 };
             }
@@ -216,10 +216,10 @@ fn generate_env_parse_code(field_name: &Option<syn::Ident>, ty: &Type, env_name:
     } else {
         quote! {
             if let Ok(value) = std::env::var(#env_name) {
-                self.#field = value.parse().map_err(|e| genies::core::error::ConfigError::ParseError(format!("Failed to parse: {}", e)))?;
+                self.#field = value.parse().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse: {}", e)))?;
             }
             if let Ok(value) = std::env::var(#env_name_snake) {
-                self.#field = value.parse().map_err(|e| genies::core::error::ConfigError::ParseError(format!("Failed to parse: {}", e)))?;
+                self.#field = value.parse().map_err(|e| genies_core::error::ConfigError::ParseError(format!("Failed to parse: {}", e)))?;
             }
         }
     }
