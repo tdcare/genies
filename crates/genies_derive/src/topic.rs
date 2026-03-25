@@ -7,9 +7,7 @@
 
 use proc_macro2::*;
 use quote::{quote, ToTokens};
-// use quote::ToTokens;
-use syn;
-use syn::{AttributeArgs, FnArg, ItemFn};
+use syn::{AttributeArgs, FnArg, ItemFn, Lit, Meta, NestedMeta};
 
 use crate::helpers::*;
 use crate::proc_macro::TokenStream;
@@ -54,17 +52,36 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
     let mut metadata = String::new();
 
     for arg in args {
-        let arg_token_stream = arg.to_token_stream();
-        let kv = format!("{}", arg_token_stream);
-        let (k, v) = kv.split_once("=").unwrap();
-        if k.contains("name") {
-            topic_name = v.replace("\"", "").trim().to_string();
-        }
-        if k.contains("pubsub") {
-            pubsub_name = v.replace("\"", "").trim().to_string();
-        }
-        if k.contains("metadata") {
-            metadata = v.replace("\"", "").trim().to_string();
+        match arg {
+            NestedMeta::Meta(Meta::NameValue(nv)) => {
+                let key = nv.path.get_ident().map(|i| i.to_string());
+                if let Some(key) = key {
+                    if let Lit::Str(lit) = &nv.lit {
+                        match key.as_str() {
+                            "name" => topic_name = lit.value(),
+                            "pubsub" => pubsub_name = lit.value(),
+                            "metadata" => metadata = lit.value(),
+                            other => {
+                                return syn::Error::new_spanned(
+                                    &nv.path,
+                                    format!("#[topic] 不支持的参数 `{}`，支持: name, pubsub, metadata", other)
+                                ).to_compile_error().into();
+                            }
+                        }
+                    } else {
+                        return syn::Error::new_spanned(
+                            &nv.lit,
+                            format!("#[topic] 参数 `{}` 的值必须是字符串", key)
+                        ).to_compile_error().into();
+                    }
+                }
+            }
+            _ => {
+                return syn::Error::new_spanned(
+                    arg,
+                    "#[topic] 参数格式错误，应为 key = \"value\" 形式，如: #[topic(name = \"...\", pubsub = \".\"..\".\")]"
+                ).to_compile_error().into();
+            }
         }
     }
 
@@ -92,15 +109,26 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
         metadata_ident = quote! {None};
         metadata_hash_map = quote! {};
     } else {
-        let metadata_kv: Vec<&str> = metadata.split(",").collect();
-        for kv in metadata_kv {
-            let temp: Vec<&str> = kv.split("=").collect();
-            let k = temp[0];
-            let v = temp[1];
+        for item in metadata.split(',') {
+            let item = item.trim();
+            if item.is_empty() {
+                continue;
+            }
+            let mut parts = item.splitn(2, '=');
+            let k = parts.next().unwrap().trim();
+            let v = match parts.next() {
+                Some(v) => v.trim(),
+                None => {
+                    return syn::Error::new(
+                        Span::call_site(),
+                        format!("#[topic] metadata 格式错误: `{}` 应为 `key=value` 格式", item)
+                    ).to_compile_error().into();
+                }
+            };
             metadata_hash_map = quote! {
-            #metadata_hash_map
-            metadata.insert(#k.to_string(), #v.to_string());
-        };
+                #metadata_hash_map
+                metadata.insert(#k.to_string(), #v.to_string());
+            };
         }
         metadata_ident = quote! {Some(metadata)};
     }

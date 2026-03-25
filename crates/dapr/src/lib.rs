@@ -13,5 +13,5 @@
  pub mod dapr_sub;
  pub mod topicpoint;
 
- // 重新导出 collect_topic_routers 和 collect_topic_subscriptions 函数
- pub use topicpoint::{collect_topic_routers, collect_topic_subscriptions};
+ // 重新导出 topicpoint 模块的公开函数
+ pub use topicpoint::{collect_topic_routers, collect_topic_subscriptions, dapr_subscribe_handler, dapr_event_router};

@@ -26,8 +26,13 @@ pub use genies_dapr as dapr;
 pub use genies_ddd as ddd ;
 pub use genies_k8s as k8s ;
 
-// 重新导出 topic 路由自动收集函数，方便用户直接使用 genies::collect_topic_routers()
-pub use genies_dapr::{collect_topic_routers, collect_topic_subscriptions};
+// 重新导出 topic 路由自动收集函数，方便用户直接使用
+pub use genies_dapr::{
+    collect_topic_routers, 
+    collect_topic_subscriptions,
+    dapr_subscribe_handler,
+    dapr_event_router,
+};
 
 
 

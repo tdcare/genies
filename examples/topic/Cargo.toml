@@ -10,6 +10,7 @@ edition.workspace = true
 [dependencies]
 genies = { workspace = true }
 genies_derive = { workspace = true }
+genies_cache = { workspace = true }
 rbatis={workspace = true}
 salvo={workspace = true,features = []}
 

@@ -1,0 +1,20 @@
+[package]
+name = "integration"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+
+[dependencies]
+genies = { workspace = true }
+genies_cache = { workspace = true }
+rbatis = { workspace = true }
+rbs = { workspace = true }
+rbdc = { workspace = true }
+rbdc-mysql = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+async-trait = { workspace = true }
+futures = "0.3"

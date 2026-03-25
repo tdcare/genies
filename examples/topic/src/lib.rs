@@ -1,3 +1,4 @@
+use salvo::prelude::*;
 use salvo::Router;
 
 mod UseDeviceListeners;
@@ -6,41 +7,65 @@ mod DeviceUseEvent;
 use genies::dapr::dapr_sub::dapr_sub;
 // 手动注册时需要导入每个 hoop
 use crate::UseDeviceListeners::{onDeviceUseEvent1_hoop, onDeviceUseEvent_hoop};
+// 手动注册订阅发现端点时需要导入每个 _dapr 函数
+use crate::UseDeviceListeners::{onDeviceUseEvent_dapr, onDeviceUseEvent1_dapr};
 
-/// 手动注册方式 - 显式导入每个 topic handler 并添加 hoop
+/// 方式一：完全自动化（推荐）— 一行代码搞定
+/// 
+/// 包含：
+/// - GET /dapr/subscribe — 订阅发现端点
+/// - POST /daprsub/consumers — 事件消费端点
+pub fn event_consumer_config_full_auto() -> Router {
+    genies::dapr_event_router()
+}
+
+/// 方式二：半自动 — 自动收集 handler，手动组装路由
+/// 
+/// 适用于需要自定义路由结构的场景
+pub fn event_consumer_config_auto() -> Router {
+    Router::new()
+        .push(Router::with_path("/dapr/subscribe").get(genies::dapr_subscribe_handler))
+        .push(genies::collect_topic_routers().post(dapr_sub))
+}
+
+/// 方式三：手动注册 — 完全手动（与原生产代码一致）
 /// 
 /// 使用这种方式需要：
-/// 1. 手动导入每个 handler 的 `_hoop` 函数
+/// 1. 手动导入每个 handler 的 `_hoop` 和 `_dapr` 函数
 /// 2. 依次调用 `.hoop()` 添加每个 handler
+/// 3. 手动编写订阅发现端点 handler
 pub fn event_consumer_config_manual() -> Router {
-    Router::new().push(
-        Router::with_path("/daprsub/consumers")
-            .hoop(onDeviceUseEvent_hoop)
-            .hoop(onDeviceUseEvent1_hoop)
-            .post(dapr_sub)
-    )
+    Router::new()
+        // 订阅发现端点：手动返回订阅列表
+        .push(Router::with_path("/dapr/subscribe").get(manual_subscribe_handler))
+        // 事件消费端点：手动添加每个 hoop
+        .push(
+            Router::with_path("/daprsub/consumers")
+                .hoop(onDeviceUseEvent_hoop)
+                .hoop(onDeviceUseEvent1_hoop)
+                .post(dapr_sub)
+        )
 }
 
-/// 自动注册方式 - 通过 inventory 自动收集所有 topic handler
-/// 
-/// 使用这种方式：
-/// 1. 无需手动导入每个 handler
-/// 2. 所有使用 `#[topic]` 标注的函数会自动被收集
-pub fn event_consumer_config_auto() -> Router {
-    Router::new().push(
-        genies::collect_topic_routers().post(dapr_sub)
-    )
+/// 手动编写的订阅发现 handler
+/// 返回所有手动配置的 DaprTopicSubscription
+#[handler]
+async fn manual_subscribe_handler(res: &mut Response) {
+    let subscriptions = vec![
+        onDeviceUseEvent_dapr(),
+        onDeviceUseEvent1_dapr(),
+    ];
+    res.render(Json(&subscriptions));
 }
 
-/// 默认的事件消费者配置（使用自动注册方式）
+/// 默认的事件消费者配置（使用完全自动化方式）
 pub fn event_consumer_config() -> Router {
-    event_consumer_config_auto()
+    event_consumer_config_full_auto()
 }
 
 /// 手动收集所有 topic handler 的订阅配置
 /// 用于测试验证与自动收集的一致性
 pub fn collect_subscriptions_manual() -> Vec<genies::dapr::pubsub::DaprTopicSubscription> {
-    use crate::UseDeviceListeners::{onDeviceUseEvent_dapr, onDeviceUseEvent1_dapr};
     vec![
         onDeviceUseEvent_dapr(),
         onDeviceUseEvent1_dapr(),
@@ -52,29 +77,39 @@ mod tests {
     use super::*;
     use genies::dapr::topicpoint::Topicpoint;
 
-    /// 测试手动和自动注册的 Router 的 hoops 数量一致
+    /// 测试完全自动化方式和半自动方式的路由数量一致
     #[test]
-    fn test_manual_and_auto_routers_have_same_hoops_count() {
-        let manual_router = event_consumer_config_manual();
+    fn test_full_auto_and_auto_routers_have_same_count() {
+        let full_auto_router = event_consumer_config_full_auto();
         let auto_router = event_consumer_config_auto();
 
-        // 获取子路由的 hoops 数量
-        let manual_hoops_count = manual_router.routers().first()
-            .map(|r| r.hoops().len())
-            .unwrap_or(0);
-        let auto_hoops_count = auto_router.routers().first()
-            .map(|r| r.hoops().len())
-            .unwrap_or(0);
+        let full_auto_count = full_auto_router.routers().len();
+        let auto_count = auto_router.routers().len();
 
-        println!("手动注册 hoops 数量: {}", manual_hoops_count);
-        println!("自动注册 hoops 数量: {}", auto_hoops_count);
+        println!("完全自动化路由数量: {}", full_auto_count);
+        println!("半自动路由数量: {}", auto_count);
 
         assert_eq!(
-            manual_hoops_count, auto_hoops_count,
-            "手动注册和自动注册的 hoops 数量应该一致"
+            full_auto_count, auto_count,
+            "完全自动化和半自动的子路由数量应该一致"
         );
-        // 确保至少有 2 个 handler
-        assert_eq!(manual_hoops_count, 2, "应该有 2 个 topic handler");
+        // 应该有 2 个子路由：/dapr/subscribe 和 /daprsub/consumers
+        assert_eq!(full_auto_count, 2, "应该有 2 个子路由");
+    }
+
+    /// 测试 dapr_event_router 包含正确的路由结构
+    #[test]
+    fn test_dapr_event_router_structure() {
+        let router = genies::dapr_event_router();
+        
+        println!("路由结构: {:#?}", router);
+        
+        // 应该有 2 个子路由
+        assert_eq!(
+            router.routers().len(),
+            2,
+            "dapr_event_router 应该有 2 个子路由"
+        );
     }
 
     /// 测试自动收集的订阅配置与手动收集的一致
@@ -114,24 +149,30 @@ mod tests {
         }
     }
 
-    /// 测试两种方式的 Router 都注册在正确的路径上
+    /// 测试三种方式的 Router 都注册在正确的路径上
     #[test]
-    fn test_both_routers_have_correct_path() {
-        let manual_router = event_consumer_config_manual();
+    fn test_all_routers_have_correct_structure() {
+        let full_auto_router = event_consumer_config_full_auto();
         let auto_router = event_consumer_config_auto();
+        let manual_router = event_consumer_config_manual();
 
         // 打印路由结构以便调试
+        println!("完全自动化路由结构: {:#?}", full_auto_router);
+        println!("半自动路由结构: {:#?}", auto_router);
         println!("手动注册路由结构: {:#?}", manual_router);
-        println!("自动注册路由结构: {:#?}", auto_router);
 
-        // 验证子路由都存在
+        // 验证所有路由都有子路由
         assert!(
-            !manual_router.routers().is_empty(),
-            "手动注册的 Router 应该有子路由"
+            !full_auto_router.routers().is_empty(),
+            "完全自动化 Router 应该有子路由"
         );
         assert!(
             !auto_router.routers().is_empty(),
-            "自动注册的 Router 应该有子路由"
+            "半自动 Router 应该有子路由"
+        );
+        assert!(
+            !manual_router.routers().is_empty(),
+            "手动注册 Router 应该有子路由"
         );
     }
 
