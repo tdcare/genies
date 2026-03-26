@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::Once;
 use std::time::Duration;
 // use async_std::task;
 use genies_core::jwt::*;
@@ -42,27 +43,25 @@ pub struct ApplicationContext {
     pub cache_service: CacheService,
     pub redis_save_service: CacheService,
     pub keycloak_keys: Keys,
+    mysql_init_once: Once,  // 线程安全的初始化标志
 }
 impl ApplicationContext {
     /// init database pool
     pub async fn init_mysql(&self) {
-        //连接数据库
-        log::debug!(
-            "rbatis mysql init ({})...",
-            self.config.database_url
-        );
-
-        let _=  self.rbatis.init(rbdc_mysql::driver::MysqlDriver {}, &self.config.database_url).unwrap();
-
-        let _ = self.rbatis.get_pool().unwrap().set_max_open_conns(self.config.max_connections as u64);
-        let _ = self.rbatis.get_pool().unwrap().set_max_idle_conns(self.config.wait_timeout as u64);
-        let _ = self.rbatis.get_pool().unwrap().set_conn_max_lifetime(Some(Duration::from_secs(self.config.max_lifetime as u64)));
-
+        self.mysql_init_once.call_once(|| {
+            log::debug!("rbatis mysql init ({})...", self.config.database_url);
+            let _ = self.rbatis.init(rbdc_mysql::driver::MysqlDriver {}, &self.config.database_url).unwrap();
+            
+            let _ = self.rbatis.get_pool().unwrap().set_max_open_conns(self.config.max_connections as u64);
+            let _ = self.rbatis.get_pool().unwrap().set_max_idle_conns(self.config.wait_timeout as u64);
+            let _ = self.rbatis.get_pool().unwrap().set_conn_max_lifetime(Some(std::time::Duration::from_secs(self.config.max_lifetime)));
+        });
+        
+        // 异步获取连接验证放在 call_once 外面（每次都可以验证）
         let _ = self.rbatis.get_pool().unwrap().get().await;
-
-        log::info!("rbatis mysql init success! pool state = {:?}",
-                 self.rbatis.get_pool().expect("pool not init!").state().await
-            );
+        
+        log::info!("rbatis mysql init success! pool state = {:?}", self.rbatis.get_pool().unwrap().state().await);
+    }
 
         // let manager = ManagerPorxy::from(
         //     Arc::new(RBDCManager::new(MysqlDriver{}, &self.config.database_url).unwrap()));
@@ -83,8 +82,6 @@ impl ApplicationContext {
         //     _=>{log::error!("RBatis 初始化失败 ")}
         // };
 
-    }
-
     pub fn new() -> Self {
         let config = ApplicationConfig::from_sources("./application.yml").unwrap();
         log::debug!("config = {:?}", config);
@@ -97,6 +94,7 @@ impl ApplicationContext {
             cache_service: CacheService::new(&config),
             redis_save_service: CacheService::new_saved(&config),
             config,
+            mysql_init_once: Once::new(),
         }
     }
 }

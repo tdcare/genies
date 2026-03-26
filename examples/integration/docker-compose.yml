@@ -1,0 +1,24 @@
+services:
+  redis:
+    image: docker.io/library/redis:7-alpine
+    container_name: genies-test-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass Tdcarefor123
+
+  mysql:
+    image: docker.io/library/mysql:8.0
+    container_name: genies-test-mysql
+    ports:
+      - "23306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: baseinfo_service
+      MYSQL_USER: tdnis
+      MYSQL_PASSWORD: "Tdcare123for"
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - genies-mysql-data:/var/lib/mysql
+
+volumes:
+  genies-mysql-data:

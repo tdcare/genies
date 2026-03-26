@@ -14,17 +14,17 @@ server_url: "0.0.0.0:8050"
 #如果gateway 为非法的http 协议 将通Dapr 方式进行访问
 gateway: "http://58.20.184.66:6002"
 
-#缓存介质类型,单选("mem","redis")
+#缓存介质类型，单选 ("mem","redis")
 cache_type: "redis"
 
 #redis地址(cache_type为"redis"时有效)
-redis_url: "redis://:reCtfK2_CK8tAjLU@58.20.184.66:6007"
+redis_url: "redis://:Tdcarefor123@127.0.0.1:6379"
 
 #可持久化redis地址(cache_type为"redis"时有效)
-redis_save_url: "redis://:reCtfK2_CK8tAjLU@58.20.184.66:6007"
+redis_save_url: "redis://:Tdcarefor123@127.0.0.1:6379"
 
 #数据库地址   root:root@127.0.0.1:3306/baseinfo_service
-database_url: "mysql://tdnis:Tdcare123for$@58.20.184.66:6006/tdbox_service?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf8"
+database_url: "mysql://tdnis:Tdcare123for@127.0.0.1:23306/baseinfo_service?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf8"
 
 #数据库连接池参数
 max_connections: 20

@@ -65,11 +65,13 @@ impl ICacheService for RedisService {
     }
     async fn del_string(&self, k: &str) -> Result<String> {
         let mut conn = self.get_conn().await?;
-        let result: RedisResult<Option<String>> =
+        // DEL 命令返回 integer（删除的 key 数量），不是 string
+        let result: RedisResult<i64> =
             redis::cmd("DEL").arg(&[k]).query_async(&mut conn).await;
         match result {
-            Ok(v) => {
-                return Ok(v.unwrap_or(String::new()));
+            Ok(deleted_count) => {
+                // 返回删除的 key 数量作为字符串
+                return Ok(deleted_count.to_string());
             }
             Err(e) => {
                 return Err(Error::from(format!(
