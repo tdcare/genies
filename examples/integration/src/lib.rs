@@ -5,6 +5,8 @@
 //! 注意: 测试需要连接真实的 Redis 和 MySQL 服务器，
 //! 配置信息在 `application.yml` 中。
 
+use rbs::value;
+
 #[cfg(test)]
 mod redis_tests {
     use genies::context::CONTEXT;
@@ -219,6 +221,7 @@ mod redis_tests {
 #[cfg(test)]
 mod mysql_tests {
     use genies::context::CONTEXT;
+    use rbs::value;
 
     /// 辅助函数：确保 MySQL 已初始化
     async fn ensure_mysql_init() {
@@ -367,7 +370,7 @@ mod mysql_tests {
         let result: Vec<rbs::Value> = rb
             .query_decode(
                 "SELECT ? as id, ? as name",
-                vec![rbs::to_value!(1), rbs::to_value!("param_test")],
+                vec![value!(1), value!("param_test")],
             )
             .await
             .expect("Parameterized query failed");
@@ -486,5 +489,7 @@ mod config_tests {
 #[cfg(test)]
 mod topic_tests;
 
+// mod e2e_business_tests; // 模块文件不存在，已注释
+
 #[cfg(test)]
-mod e2e_business_tests;
+mod auth_tests;

@@ -15,6 +15,7 @@ repository = "https://github.com/tdcare/genies"
 genies = { path = "../crates/genies" }
 genies_derive = { path = "../crates/genies_derive" }
 genies_cache = { path = "../crates/cache" }
+genies_auth = { path = "../crates/auth" }
 
 
 
@@ -37,7 +38,7 @@ tracing-subscriber ={version= "0.3",features = ["env-filter"]}
 tokio = { version = "1.22.0", features = ["full"] }
 
 
-salvo = {version="0.79.0",features=["rustls"]}
+salvo = {version="0.89",features=["rustls"]}
 
 async-trait = "0.1.59"
 

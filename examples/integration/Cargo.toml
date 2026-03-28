@@ -9,6 +9,7 @@ edition.workspace = true
 genies = { workspace = true }
 genies_derive = { workspace = true }
 genies_cache = { workspace = true }
+genies_auth = { workspace = true }
 rbatis = { workspace = true }
 rbs = { workspace = true }
 rbdc = { workspace = true }
@@ -25,3 +26,6 @@ rs-snowflake = "0.6"
 salvo = { workspace = true }
 chrono = "0.4"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
+casbin = { version = "2.10.1", features = ["runtime-tokio"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
