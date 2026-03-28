@@ -23,10 +23,10 @@ genies_auth provides a complete role-based access control (RBAC) solution with b
 |-----------|------|-------------|
 | `EnforcerManager` | enforcer_manager.rs | Casbin Enforcer manager with hot reload, `RwLock<Arc<Enforcer>>` for concurrency safety |
 | `casbin_auth` | middleware.rs | Salvo middleware for JWT auth + Casbin permission check, injects enforcer/subject into Depot |
-| `auth_admin_router` | admin_api.rs | Admin API router (12 endpoints for policy/role/group/model CRUD + reload) |
+| `auth_admin_router` | admin_api.rs | Admin API router (14 endpoints with OpenAPI annotations for policy/role/group/model CRUD + reload) |
 | `RBatisAdapter` | adapter.rs | Casbin Adapter implementation backed by MySQL |
 | `extract_and_sync_schemas` | schema_extractor.rs | Extract schemas from OpenAPI docs and sync to database |
-| `cache` | cache.rs | Redis cache layer for policies/schemas + version sync |
+| `version_sync` | version_sync.rs | Enforcer multi-instance version sync via Redis (`invalidate_and_reload()`, `get_enforcer_version()`) |
 | `models` | models.rs | Database models + Flyway migrations (`run_migrations`) |
 
 ### Middleware Flow
@@ -127,14 +127,23 @@ async fn main() {
 | `/auth/model` | PUT | Update Casbin model |
 | `/auth/policies` | GET | List all policies |
 | `/auth/policies` | POST | Add policy |
-| `/auth/policies/<id>` | DELETE | Delete policy |
+| `/auth/policies/{id}` | DELETE | Delete policy |
 | `/auth/roles` | GET | List role mappings (g) |
 | `/auth/roles` | POST | Add role mapping |
-| `/auth/roles/<id>` | DELETE | Delete role mapping |
+| `/auth/roles/{id}` | DELETE | Delete role mapping |
 | `/auth/groups` | GET | List groups (g2) |
 | `/auth/groups` | POST | Add group |
-| `/auth/groups/<id>` | DELETE | Delete group |
+| `/auth/groups/{id}` | DELETE | Delete group |
 | `/auth/reload` | POST | Manually reload Enforcer |
+| `/auth/version` | GET | Get current Enforcer version |
+
+All endpoints are annotated with OpenAPI metadata (`#[endpoint(tags, summary, description)]`) for automatic API documentation.
+
+### SwaggerUI Integration
+
+When using the integration example, SwaggerUI is available at:
+- **SwaggerUI**: `/swagger-ui/`
+- **OpenAPI JSON**: `/api-doc/openapi.json`
 
 ## Database Tables
 

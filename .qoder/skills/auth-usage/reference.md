@@ -339,7 +339,7 @@ pub async fn reload(&self) -> anyhow::Result<()> {
     *guard = Arc::new(new_enforcer);
 
     // 3. 清除 Redis 缓存并更新版本号
-    if let Err(e) = cache::invalidate_and_reload().await {
+    if let Err(e) = version_sync::invalidate_and_reload().await {
         log::warn!("清除 Redis 缓存失败: {}", e);
     }
 
@@ -356,7 +356,9 @@ pub async fn reload(&self) -> anyhow::Result<()> {
 
 ---
 
-## 5. Redis 缓存层详细 API
+## 5. 版本同步层详细 API
+
+> 模块已从 `cache` 重命名为 `version_sync`，功能不变：Enforcer 多实例版本同步。
 
 ### 常量定义
 
@@ -397,11 +399,15 @@ pub async fn invalidate_and_reload() -> anyhow::Result<()>
 pub async fn get_enforcer_version() -> anyhow::Result<Option<String>>
 ```
 
+公开 API：
+- `version_sync::invalidate_and_reload()` - 清除缓存 + 更新版本号
+- `version_sync::get_enforcer_version()` - 获取当前版本号
+
 ### 多实例同步机制
 
-1. 实例 A 调用 `reload()` → 调用 `invalidate_and_reload()`
-2. `invalidate_and_reload()` 删除缓存 + 更新版本号（时间戳）
-3. 其他实例定期检查 `get_enforcer_version()` 与本地版本对比
+1. 实例 A 调用 `reload()` → 调用 `version_sync::invalidate_and_reload()`
+2. `version_sync::invalidate_and_reload()` 删除缓存 + 更新版本号（时间戳）
+3. 其他实例定期检查 `version_sync::get_enforcer_version()` 与本地版本对比
 4. 版本不一致时触发本地 `reload()`
 
 ---
@@ -499,23 +505,37 @@ Auth 模块的 Admin API 端点
 - Casbin 模型定义管理
 - 策略规则管理（policy/role/group）
 - Enforcer 热重载
+- 权限检查
+
+所有端点均支持 OpenAPI 元数据：
+- #[endpoint(tags("xxx"), summary = "...", description = "...")]
+- 路径参数：PathParam<i64>
+- 请求体：JsonBody<T>
+- DTO 结构体包含 schema example 注解
 ```
 
-| 端点 | 方法 | 功能说明 | 中文标签建议 |
-|------|------|----------|-------------|
-| `/auth/schemas` | GET | 列出所有 API Schema 和字段 | 获取Schema列表 |
-| `/auth/model` | GET | 获取当前 Casbin 模型定义 | 获取权限模型 |
-| `/auth/model` | PUT | 修改 Casbin 模型定义（更新后自动重载 Enforcer） | 更新权限模型 |
-| `/auth/policies` | GET | 列出所有策略规则 | 获取策略列表 |
-| `/auth/policies` | POST | 添加策略规则（添加后自动重载 Enforcer） | 添加策略规则 |
-| `/auth/policies/<id>` | DELETE | 删除策略规则（删除后自动重载 Enforcer） | 删除策略规则 |
-| `/auth/roles` | GET | 列出角色分配 (g 类型) | 获取角色分配 |
-| `/auth/roles` | POST | 添加用户到角色的映射（ptype='g'） | 添加角色分配 |
-| `/auth/roles/<id>` | DELETE | 移除角色分配 | 移除角色分配 |
-| `/auth/groups` | GET | 列出对象分组 (g2 类型) | 获取对象分组 |
-| `/auth/groups` | POST | 添加资源到分组的映射（ptype='g2'） | 添加对象分组 |
-| `/auth/groups/<id>` | DELETE | 移除对象分组 | 移除对象分组 |
-| `/auth/reload` | POST | 手动触发 Enforcer 重载（从数据库重新加载模型和策略） | 重载权限引擎 |
+| 端点 | 方法 | Tag | 功能说明 | 中文标签建议 |
+|------|------|-----|----------|-------------|
+| `/auth/schemas` | GET | schemas | 列出所有 API Schema 和字段 | 获取Schema列表 |
+| `/auth/model` | GET | model | 获取当前 Casbin 模型定义 | 获取权限模型 |
+| `/auth/model` | PUT | model | 修改 Casbin 模型定义（更新后自动重载 Enforcer） | 更新权限模型 |
+| `/auth/policies` | GET | policies | 列出所有策略规则 | 获取策略列表 |
+| `/auth/policies` | POST | policies | 添加策略规则（添加后自动重载 Enforcer） | 添加策略规则 |
+| `/auth/policies/{id}` | DELETE | policies | 删除策略规则（PathParam<i64>） | 删除策略规则 |
+| `/auth/roles` | GET | roles | 列出角色分配 (g 类型) | 获取角色分配 |
+| `/auth/roles` | POST | roles | 添加用户到角色的映射（ptype='g'） | 添加角色分配 |
+| `/auth/roles/{id}` | DELETE | roles | 移除角色分配（PathParam<i64>） | 移除角色分配 |
+| `/auth/groups` | GET | groups | 列出对象分组 (g2 类型) | 获取对象分组 |
+| `/auth/groups` | POST | groups | 添加资源到分组的映射（ptype='g2'） | 添加对象分组 |
+| `/auth/groups/{id}` | DELETE | groups | 移除对象分组（PathParam<i64>） | 移除对象分组 |
+| `/auth/reload` | POST | system | 手动触发 Enforcer 重载 | 重载权限引擎 |
+| `/auth/check` | POST | auth | 检查权限 | 权限检查 |
+
+### SwaggerUI 集成
+
+integration 示例服务器支持 SwaggerUI，启动后访问：
+- **SwaggerUI**: `http://localhost:<port>/swagger-ui/`
+- **OpenAPI JSON**: `http://localhost:<port>/api-doc/openapi.json`
 
 ### 通用响应格式
 
