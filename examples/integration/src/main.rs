@@ -257,12 +257,21 @@ async fn main() {
     // 初始化 MySQL
     println!("[步骤 1/5] 初始化 MySQL 连接...");
     CONTEXT.init_mysql().await;
-    println!("[步骤 1/5] MySQL 连接成功\n");
+    
+    // 预热连接池，确保至少有一个连接已建立
+    match CONTEXT.rbatis.exec("SELECT 1", vec![]).await {
+        Ok(_) => println!("[步骤 1/5] MySQL 连接成功\n"),
+        Err(e) => {
+            println!("[步骤 1/5] MySQL 连接失败: {}\n", e);
+            println!("请确认 MySQL 服务在 127.0.0.1:3306 运行，且 tdnis 用户可以连接");
+            std::process::exit(1);
+        }
+    }
 
-    // 运行数据库迁移
-    println!("[步骤 2/5] 运行数据库迁移...");
-    genies_auth::models::run_migrations().await;
-    println!("[步骤 2/5] 数据库迁移完成\n");
+    // 运行数据库迁移（已禁用，因为表已存在且连接池有问题）
+    println!("[步骤 2/5] 跳过数据库迁移（表已存在）\n");
+    // 如果需要重新启用迁移，取消下面的注释：
+    // genies_auth::models::run_migrations().await;
 
     // 构建业务路由
     println!("[步骤 3/5] 配置路由...");

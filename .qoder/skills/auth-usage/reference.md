@@ -173,10 +173,11 @@ Casbin API 接口访问控制中间件
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  Writer（字段级权限过滤）                                                 │
+│  Writer（字段级权限过滤 - JSON 树过滤）                                 │
 │  ├── 1. 从 Depot 提取 casbin_enforcer 和 casbin_subject                  │
-│  ├── 2. 注入到结构体的 enforcer 和 subject 字段                          │
-│  └── 3. 序列化时自动触发 check_permission() 过滤每个字段                  │
+│  ├── 2. 使用 serde_json::to_value() 标准序列化为 JSON                    │
+│  ├── 3. 调用 casbin_filter() 递归过滤 JSON 树                            │
+│  └── 4. 使用 res.render(Json(value)) 写入已过滤的响应                    │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -194,109 +195,150 @@ Casbin API 接口访问控制中间件
 
 ```rust
 #[casbin]
-#[derive(Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct User {
     pub id: u64,
     pub name: Option<String>,
     pub email: String,
+    pub address: Option<Address>,  // 嵌套类型
+    pub accounts: Vec<BankAccount>, // 嵌套数组
 }
 ```
 
 ### 宏展开后的完整代码
 
 ```rust
-// 原始结构体（添加了两个字段）
-#[derive(Deserialize, ToSchema)]
+// 原始结构体保持不变（使用标准 #[derive(Serialize)]）
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct User {
     pub id: u64,
     pub name: Option<String>,
     pub email: String,
-    #[serde(skip)]
-    pub enforcer: Option<std::sync::Arc<casbin::Enforcer>>,
-    #[serde(skip)]
-    pub subject: Option<String>,
+    pub address: Option<Address>,
+    pub accounts: Vec<BankAccount>,
 }
 
-// with_policy 和 check_permission 方法
+// 生成 casbin_filter 静态方法（递归过滤 JSON Value 树）
 impl User {
-    /// 设置权限策略上下文
-    pub fn with_policy(mut self, enforcer: std::sync::Arc<casbin::Enforcer>, subject: String) -> Self {
-        self.enforcer = Some(enforcer);
-        self.subject = Some(subject);
-        self
-    }
-
-    /// 检查字段权限
-    /// 参数 field 是字段名（如 "email"）
-    /// 返回 true 表示允许访问
-    pub fn check_permission(&self, field: &str) -> bool {
+    /// 对 JSON Value 树进行递归权限过滤
+    pub fn casbin_filter(
+        value: &mut serde_json::Value,
+        enforcer: &casbin::Enforcer,
+        subject: &str,
+    ) {
         use casbin::CoreApi;
-        // 获取 Schema 名称（如 "User"）
-        let name = salvo::oapi::naming::assign_name::<User>(salvo::oapi::naming::NameRule::Auto);
-        // 构造完整字段标识（如 "User.email"）
-        let field_str = format!("{}.{}", name, field);
-        
-        match (&self.enforcer, &self.subject) {
-            (Some(e), Some(s)) => {
-                // 调用 Casbin 检查权限
-                match e.enforce((s, &field_str, "read")) {
-                    Ok(b) => {
-                        log::debug!("权限检查:sub={},obj={},permission:{}", s, field_str, b);
-                        return b;
-                    }
-                    Err(e) => {
-                        log::warn!("权限检查--策略文件定义出错:sub={},obj={},permission:{},Err:{}", s, field_str, false, e);
-                        return false;
-                    }
+        let type_name = salvo::oapi::naming::assign_name::<User>(salvo::oapi::naming::NameRule::Auto);
+
+        if let serde_json::Value::Object(map) = value {
+            // 1. 过滤自身字段
+            let keys: Vec<String> = map.keys().cloned().collect();
+            for key in keys {
+                let resource = format!("{}.{}", type_name, key);
+                match enforcer.enforce((subject, &resource, "read")) {
+                    Ok(false) => { map.remove(&key); }
+                    _ => {}  // Ok(true) 或 Err 都保留字段
                 }
             }
-            _ => {
-                log::warn!("权限检查--enforcer或subject未设置:obj={},permission:{}", field_str, false);
-                false
+
+            // 2. 递归过滤嵌套字段（自动检测非原始类型）
+            // Option<Address> 类型
+            if let Some(v) = map.get_mut("address") {
+                if !v.is_null() {
+                    genies_auth::casbin_filter_object(v, "Address", enforcer, subject);
+                }
+            }
+            // Vec<BankAccount> 类型
+            if let Some(serde_json::Value::Array(arr)) = map.get_mut("accounts") {
+                for item in arr.iter_mut() {
+                    genies_auth::casbin_filter_object(item, "BankAccount", enforcer, subject);
+                }
             }
         }
     }
 }
 
-// 自定义序列化实现（带权限检查）
-impl ::serde::Serialize for User {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: ::serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("User", 5)?;
-        
-        // 每个字段序列化前检查权限
-        if self.check_permission("id") {
-            state.serialize_field("id", &self.id)?;
+// 生成 Salvo Writer trait 实现
+#[async_trait::async_trait]
+impl salvo::writing::Writer for User {
+    async fn write(
+        mut self,
+        _req: &mut salvo::prelude::Request,
+        depot: &mut salvo::prelude::Depot,
+        res: &mut salvo::prelude::Response,
+    ) {
+        // 1. 从 Depot 提取权限信息（由 casbin_auth 中间件注入）
+        let enforcer = depot.get::<std::sync::Arc<casbin::Enforcer>>("casbin_enforcer").ok().cloned();
+        let subject = depot.get::<String>("casbin_subject").ok().cloned();
+
+        // 2. 使用标准 Serialize 序列化为 JSON Value
+        match serde_json::to_value(&self) {
+            Ok(mut value) => {
+                // 3. 递归权限过滤 JSON 树
+                if let (Some(ref e), Some(ref s)) = (enforcer, subject) {
+                    Self::casbin_filter(&mut value, e, s);
+                }
+                // 4. 写入已过滤的响应
+                res.render(salvo::prelude::Json(value));
+            }
+            Err(e) => {
+                res.status_code(salvo::http::StatusCode::INTERNAL_SERVER_ERROR);
+                res.render(format!("Serialization error: {}", e));
+            }
         }
-        if self.check_permission("name") {
-            state.serialize_field("name", &self.name)?;
-        }
-        if self.check_permission("email") {
-            state.serialize_field("email", &self.email)?;
-        }
-        // enforcer 和 subject 字段被过滤，不序列化
-        
-        state.end()
+    }
+}
+```
+
+### 自动嵌套检测机制
+
+宏通过 `PRIMITIVE_TYPES` 白名单自动识别非原始类型：
+- 原始类型：`u8, u16, u32, u64, i8, i16, i32, i64, f32, f64, bool, String, &str` 等
+- 非原始类型：自定义 struct、`Option<T>`、`Vec<T>` 等
+
+对于嵌套类型，宏自动生成递归过滤代码，调用 `genies_auth::casbin_filter_object`：
+
+```rust
+// 普通嵌套类型 T
+if let Some(v) = map.get_mut("child") {
+    genies_auth::casbin_filter_object(v, "Child", enforcer, subject);
+}
+
+// Option<T> 类型（检查非 null 后过滤）
+if let Some(v) = map.get_mut("profile") {
+    if !v.is_null() {
+        genies_auth::casbin_filter_object(v, "Profile", enforcer, subject);
     }
 }
 
-// Salvo Writer trait 实现
-#[async_trait::async_trait]
-impl salvo::writing::Writer for User {
-    async fn write(mut self, _req: &mut salvo::Request, depot: &mut salvo::Depot, res: &mut salvo::Response) {
-        // 自动从 Depot 提取 enforcer（由 casbin_auth 中间件注入）
-        if let Ok(enforcer) = depot.get::<std::sync::Arc<casbin::Enforcer>>("casbin_enforcer") {
-            self.enforcer = Some(enforcer.clone());
+// Vec<T> 类型（遍历数组元素逐个过滤）
+if let Some(serde_json::Value::Array(arr)) = map.get_mut("items") {
+    for item in arr.iter_mut() {
+        genies_auth::casbin_filter_object(item, "Item", enforcer, subject);
+    }
+}
+```
+
+### casbin_filter_object 辅助函数
+
+定义在 `genies_auth::middleware` 模块中，用于过滤嵌套对象：
+
+```rust
+/// 按类型名过滤 JSON 对象的字段（Casbin 权限检查）
+pub fn casbin_filter_object(
+    value: &mut serde_json::Value,
+    type_name: &str,
+    enforcer: &Enforcer,
+    subject: &str,
+) {
+    if let serde_json::Value::Object(map) = value {
+        let keys: Vec<String> = map.keys().cloned().collect();
+        for key in keys {
+            let resource = format!("{}.{}", type_name, key);
+            match enforcer.enforce((subject, &resource, "read")) {
+                Ok(false) => { map.remove(&key); }
+                _ => {} // Ok(true) 允许，Err 也保留（黑名单模式）
+            }
         }
-        // 自动从 Depot 提取 subject（由 casbin_auth 中间件注入）
-        if let Ok(subject) = depot.get::<String>("casbin_subject") {
-            self.subject = Some(subject.clone());
-        }
-        // 序列化时自动触发 check_permission 过滤字段
-        res.render(salvo::prelude::Json(&self));
     }
 }
 ```
@@ -762,12 +804,13 @@ CREATE TABLE IF NOT EXISTS auth_api_schemas (
 │  1. 定义阶段                                                            │
 │                                                                         │
 │  #[casbin]                                                              │
+│  #[derive(Serialize)]                                                   │
 │  struct User {                                                          │
 │      id: u64,                                                           │
 │      email: String,   // ← 敏感字段                                     │
 │  }                                                                      │
 │                                                                         │
-│  宏生成: enforcer, subject 字段 + check_permission() + Writer impl      │
+│  宏生成: casbin_filter() 方法 + Writer impl（JSON 树过滤，自动嵌套检测）  │
 └─────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -807,43 +850,53 @@ CREATE TABLE IF NOT EXISTS auth_api_schemas (
 │      Json(User {                                                        │
 │          id: 1,                                                         │
 │          email: "bob@example.com".into(),                               │
-│          enforcer: None,  // 暂时为空                                   │
-│          subject: None,                                                 │
 │      })                                                                 │
 │  }                                                                      │
 └─────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  6. Writer 处理                                                         │
+│  6. Writer 处理（JSON 树过滤）                                           │
 │                                                                         │
 │  impl Writer for User {                                                 │
 │      async fn write(...) {                                              │
-│          // 从 Depot 提取并注入                                         │
-│          self.enforcer = depot.get("casbin_enforcer");                  │
-│          self.subject = depot.get("casbin_subject");  // "bob"          │
-│          res.render(Json(&self));                                       │
+│          // 1. 从 Depot 提取 enforcer/subject                           │
+│          let enforcer = depot.get("casbin_enforcer");                   │
+│          let subject = depot.get("casbin_subject");  // "bob"           │
+│                                                                         │
+│          // 2. 使用标准 Serialize 序列化为 JSON Value                    │
+│          let mut value = serde_json::to_value(&self)?;                  │
+│                                                                         │
+│          // 3. 调用 casbin_filter 递归过滤 JSON 树                       │
+│          Self::casbin_filter(&mut value, &enforcer, &subject);          │
+│                                                                         │
+│          // 4. 写入已过滤的响应                                          │
+│          res.render(Json(value));                                       │
 │      }                                                                  │
 │  }                                                                      │
 └─────────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│  7. 序列化（字段过滤）                                                   │
+│  7. casbin_filter 递归过滤                                               │
 │                                                                         │
-│  impl Serialize for User {                                              │
-│      fn serialize(...) {                                                │
-│          // check_permission("id") → true → 序列化                      │
-│          if self.check_permission("id") {                               │
-│              state.serialize_field("id", &self.id)?;                    │
-│          }                                                              │
+│  impl User {                                                            │
+│      fn casbin_filter(value: &mut Value, enforcer: &Enforcer, sub: &str)│
+│      {                                                                  │
+│          // 遍历 JSON Object 的所有字段                                  │
+│          for key in keys {                                              │
+│              let resource = format!("User.{}", key);                    │
 │                                                                         │
-│          // check_permission("email") → 调用 enforcer.enforce()         │
-│          //   → enforce(("bob", "User.email", "read"))                  │
-│          //   → 匹配策略 ('p','bob','User.email','read','deny')         │
-│          //   → 返回 false（被 deny）                                   │
-│          if self.check_permission("email") {                            │
-│              state.serialize_field("email", &self.email)?; // 跳过      │
+│              // enforcer.enforce(("bob", "User.id", "read"))            │
+│              //   → 无 deny 策略 → Ok(true) → 保留字段                  │
+│                                                                         │
+│              // enforcer.enforce(("bob", "User.email", "read"))         │
+│              //   → 匹配策略 ('p','bob','User.email','read','deny')     │
+│              //   → Ok(false) → 从 JSON 中移除字段                      │
+│              if enforcer.enforce((sub, &resource, "read")) == Ok(false) │
+│              {                                                          │
+│                  map.remove(&key);                                      │
+│              }                                                          │
 │          }                                                              │
 │      }                                                                  │
 │  }                                                                      │
@@ -865,8 +918,8 @@ CREATE TABLE IF NOT EXISTS auth_api_schemas (
 | 检查点 | 权限类型 | 检查对象 | 检查动作 |
 |--------|----------|----------|----------|
 | casbin_auth | API 级 | `/api/users/1` | `get` |
-| check_permission("id") | 字段级 | `User.id` | `read` |
-| check_permission("email") | 字段级 | `User.email` | `read` |
+| casbin_filter (User.id) | 字段级 | `User.id` | `read` |
+| casbin_filter (User.email) | 字段级 | `User.email` | `read` |
 
 ### 策略示例汇总
 

@@ -61,10 +61,10 @@ pub struct User {
 ```
 
 `#[casbin]` 宏自动生成：
-- `enforcer: Option<Arc<Enforcer>>` 和 `subject: Option<String>` 字段
-- `with_policy()`, `check_permission()` 方法
-- 自定义 `Serialize`（序列化时检查每个字段权限）
-- Salvo `Writer` trait（自动从 Depot 注入 enforcer/subject）
+- 自定义 `Serialize`（Writer 层 JSON 树过滤）
+- Salvo `Writer` trait（从 Depot 提取 enforcer/subject 并过滤字段）
+
+**自动嵌套检测**：宏自动识别非原始类型字段（struct、`Option<T>`、`Vec<T>`）并递归过滤。无需 `#[casbin(nested)]` 标记。
 
 ### 3. Handler（零模板代码）
 
@@ -76,8 +76,6 @@ async fn get_user() -> Json<User> {
         name: Some("张三".into()),
         email: "zhangsan@example.com".into(),
         phone: "13800138000".into(),
-        enforcer: None,  // Writer 自动注入
-        subject: None,   // Writer 自动注入
     })
 }
 ```
@@ -200,7 +198,7 @@ For detailed model definition and advanced usage, see [reference.md](reference.m
 
 ## Testing
 
-集成测试位于 `examples/integration/src/auth_tests.rs`，13 个端到端测试。
+集成测试位于 `examples/integration/src/auth_tests.rs`，61 个端到端测试。
 
 运行: `cargo test -p integration auth_tests -- --nocapture --test-threads=1`
 

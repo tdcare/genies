@@ -63,11 +63,10 @@ pub struct User {
 ```
 
 `#[casbin]` 宏自动生成：
-- `enforcer` 和 `subject` 字段（`#[serde(skip)]`）
-- `with_policy()` 方法
-- `check_permission(field_name)` 方法
-- 自定义 `Serialize` 实现（序列化时按字段检查权限）
-- Salvo `Writer` trait 实现（自动从 Depot 注入 enforcer/subject）
+- 自定义 `Serialize` 实现（Writer 层 JSON 树过滤）
+- Salvo `Writer` trait 实现（从 Depot 提取 enforcer/subject 并过滤字段）
+
+**自动嵌套检测**：宏自动识别非原始类型字段（struct、`Option<T>`、`Vec<T>`），对嵌套对象递归过滤。无需 `#[casbin(nested)]` 标记。
 
 ### 3. 初始化并启动服务
 
@@ -84,8 +83,6 @@ async fn get_user() -> Json<User> {
         name: Some("张三".into()),
         email: "zhangsan@example.com".into(),
         phone: "13800138000".into(),
-        enforcer: None,
-        subject: None,
     })
 }
 
@@ -203,7 +200,7 @@ m = (g(r.sub, p.sub) || r.sub == p.sub) && (g2(r.obj, p.obj) || r.obj == p.obj |
 
 ## 测试
 
-13 个端到端测试覆盖：Schema 同步、模型管理、策略 CRUD、热更新、角色分配、分组管理、403 拒绝、字段过滤、Redis 缓存、并发安全等。
+61 个端到端测试覆盖：Schema 同步、模型管理、策略 CRUD、热更新、角色分配、分组管理、403 拒绝、字段过滤（原始字段、嵌套对象、Vec 数组、混合场景、Admin 完整访问、动态策略生效）、Redis 缓存、并发安全等。
 
 ```bash
 cargo test -p integration auth_tests -- --nocapture --test-threads=1

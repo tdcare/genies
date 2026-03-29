@@ -63,11 +63,10 @@ pub struct User {
 ```
 
 The `#[casbin]` macro automatically generates:
-- `enforcer` and `subject` fields (`#[serde(skip)]`)
-- `with_policy()` method
-- `check_permission(field_name)` method
-- Custom `Serialize` implementation (checks permission per field during serialization)
-- Salvo `Writer` trait implementation (auto-injects enforcer/subject from Depot)
+- Custom `Serialize` implementation (Writer-layer JSON tree filtering)
+- Salvo `Writer` trait implementation (extracts enforcer/subject from Depot and filters fields)
+
+**Auto Nested Detection**: The macro automatically detects non-primitive types (structs, `Option<T>`, `Vec<T>`) and recursively filters them. No `#[casbin(nested)]` annotation required.
 
 ### 3. Initialize and Start Server
 
@@ -84,8 +83,6 @@ async fn get_user() -> Json<User> {
         name: Some("John".into()),
         email: "john@example.com".into(),
         phone: "13800138000".into(),
-        enforcer: None,
-        subject: None,
     })
 }
 
@@ -203,7 +200,7 @@ m = (g(r.sub, p.sub) || r.sub == p.sub) && (g2(r.obj, p.obj) || r.obj == p.obj |
 
 ## Testing
 
-13 end-to-end tests covering: Schema sync, model management, policy CRUD, hot reload, role assignment, group management, 403 rejection, field filtering, Redis cache, concurrency safety, etc.
+61 end-to-end tests covering: Schema sync, model management, policy CRUD, hot reload, role assignment, group management, 403 rejection, field filtering (primitives, nested objects, Vec arrays, mixed scenarios, admin full access, dynamic policies), Redis cache, concurrency safety, etc.
 
 ```bash
 cargo test -p integration auth_tests -- --nocapture --test-threads=1

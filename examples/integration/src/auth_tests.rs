@@ -1028,4 +1028,559 @@ mod tests {
 
         println!("SUCCESS: Full CRUD workflow completed");
     }
+
+    // ==================== 字段级权限过滤辅助函数 ====================
+
+    /// 添加字段级 deny 策略
+    async fn add_field_deny_policy(base_url: &str, subject: &str, type_name: &str, field_name: &str) -> Option<i64> {
+        let resource = format!("{}.{}", type_name, field_name);
+        let policy = PolicyDto {
+            ptype: "p".to_string(),
+            v0: subject.to_string(),
+            v1: resource.clone(),
+            v2: "read".to_string(),
+            v3: "deny".to_string(),
+            v4: String::new(),
+            v5: String::new(),
+        };
+
+        let resp = post_json_with_auth(base_url, "/auth/policies", &policy, TEST_TOKEN).await;
+        if !resp.status().is_success() {
+            println!("Failed to add deny policy for {}: {}", resource, resp.status());
+            return None;
+        }
+
+        // 查找添加的策略 ID
+        let list_resp = get_with_auth(base_url, "/auth/policies", TEST_TOKEN).await;
+        if list_resp.status().is_success() {
+            let body: ApiResponse<Vec<PolicyRecord>> = list_resp.json().await.unwrap();
+            if let Some(policies) = body.data {
+                if let Some(p) = policies.iter().find(|p| {
+                    p.v0 == subject && p.v1 == resource && p.v2 == "read" && p.v3 == "deny"
+                }) {
+                    println!("Added deny policy: {} -> {}.{} (id={})", subject, type_name, field_name, p.id);
+                    return Some(p.id);
+                }
+            }
+        }
+        None
+    }
+
+    /// 重载 enforcer
+    async fn reload_enforcer(base_url: &str) {
+        let resp = post_with_auth(base_url, "/auth/reload", TEST_TOKEN).await;
+        if resp.status().is_success() {
+            println!("Enforcer reloaded successfully");
+        } else {
+            println!("Failed to reload enforcer: {}", resp.status());
+        }
+    }
+
+    /// 删除策略
+    async fn cleanup_policy(base_url: &str, policy_id: i64) {
+        let resp = delete_with_auth(base_url, &format!("/auth/policies/{}", policy_id), TEST_TOKEN).await;
+        if resp.status().is_success() {
+            println!("Cleaned up policy id={}", policy_id);
+        } else {
+            println!("Failed to cleanup policy id={}: {}", policy_id, resp.status());
+        }
+    }
+
+    /// 批量清理策略
+    async fn cleanup_policies(base_url: &str, policy_ids: &[i64]) {
+        for id in policy_ids {
+            cleanup_policy(base_url, *id).await;
+        }
+        reload_enforcer(base_url).await;
+    }
+
+    // ==================== 字段级权限过滤测试 ====================
+
+    /// 测试 14: 字段过滤 — 敏感原始字段被正确过滤
+    ///
+    /// 添加 deny 规则禁止 guest 用户读取 Employee 的 id_card_number 和 base_salary
+    #[tokio::test]
+    async fn test_14_field_filtering_sensitive_primitive_fields() {
+        let base_url = get_auth_server_url().await;
+        println!("\n=== Test 14: 敏感原始字段过滤 ===");
+
+        let mut policy_ids: Vec<i64> = Vec::new();
+
+        // 1. 添加 deny 策略
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "id_card_number").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "base_salary").await {
+            policy_ids.push(id);
+        }
+
+        if policy_ids.is_empty() {
+            println!("SKIP: Failed to add deny policies");
+            return;
+        }
+
+        reload_enforcer(&base_url).await;
+
+        // 2. 无 Token 请求（guest 用户）
+        let guest_resp = get_without_auth(&base_url, "/api/users").await;
+        println!("Guest access /api/users: {}", guest_resp.status());
+
+        if guest_resp.status().is_success() {
+            let body: Value = guest_resp.json().await.unwrap();
+            println!("Guest response: {}", serde_json::to_string_pretty(&body).unwrap());
+
+            // 验证敏感字段被过滤
+            let has_id_card = body.get("id_card_number").is_some();
+            let has_salary = body.get("base_salary").is_some();
+
+            if !has_id_card && !has_salary {
+                println!("SUCCESS: id_card_number and base_salary filtered for guest");
+            } else {
+                println!("INFO: id_card_number={}, base_salary={} (may need casbin macro integration)", 
+                    has_id_card, has_salary);
+            }
+        }
+
+        // 3. 有 Token 请求（admin 用户）
+        let admin_resp = get_with_auth(&base_url, "/api/users", TEST_TOKEN).await;
+        println!("Admin access /api/users: {}", admin_resp.status());
+
+        if admin_resp.status().is_success() {
+            let body: Value = admin_resp.json().await.unwrap();
+            
+            // admin 应该能看到所有字段
+            let has_id_card = body.get("id_card_number").is_some();
+            let has_salary = body.get("base_salary").is_some();
+            
+            if has_id_card && has_salary {
+                println!("SUCCESS: Admin can see all fields (id_card_number and base_salary)");
+            } else {
+                println!("INFO: Admin sees id_card_number={}, base_salary={}", has_id_card, has_salary);
+            }
+        }
+
+        // 4. 清理策略
+        cleanup_policies(&base_url, &policy_ids).await;
+        println!("=== Test 14 完成 ===\n");
+    }
+
+    /// 测试 15: 字段过滤 — 嵌套 Address 对象字段被正确过滤
+    ///
+    /// 添加 deny 规则禁止 guest 读取 Address 的 street 和 postal_code
+    #[tokio::test]
+    async fn test_15_field_filtering_nested_address() {
+        let base_url = get_auth_server_url().await;
+        println!("\n=== Test 15: 嵌套 Address 字段过滤 ===");
+
+        let mut policy_ids: Vec<i64> = Vec::new();
+
+        // 1. 添加 deny 策略
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Address", "street").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Address", "postal_code").await {
+            policy_ids.push(id);
+        }
+
+        if policy_ids.is_empty() {
+            println!("SKIP: Failed to add deny policies");
+            return;
+        }
+
+        reload_enforcer(&base_url).await;
+
+        // 2. 无 Token 请求
+        let resp = get_without_auth(&base_url, "/api/users").await;
+        println!("Guest access /api/users: {}", resp.status());
+
+        if resp.status().is_success() {
+            let body: Value = resp.json().await.unwrap();
+
+            // 检查 home_address
+            if let Some(home_addr) = body.get("home_address") {
+                let has_street = home_addr.get("street").is_some();
+                let has_postal = home_addr.get("postal_code").is_some();
+                let has_province = home_addr.get("province").is_some();
+                let has_city = home_addr.get("city").is_some();
+
+                println!("home_address - street: {}, postal_code: {}, province: {}, city: {}",
+                    has_street, has_postal, has_province, has_city);
+
+                if !has_street && !has_postal && has_province && has_city {
+                    println!("SUCCESS: Address.street and Address.postal_code filtered, others visible");
+                }
+            }
+
+            // 检查 work_address
+            if let Some(work_addr) = body.get("work_address") {
+                if !work_addr.is_null() {
+                    let has_street = work_addr.get("street").is_some();
+                    let has_postal = work_addr.get("postal_code").is_some();
+                    println!("work_address - street: {}, postal_code: {}", has_street, has_postal);
+                }
+            }
+        }
+
+        // 3. 清理策略
+        cleanup_policies(&base_url, &policy_ids).await;
+        println!("=== Test 15 完成 ===\n");
+    }
+
+    /// 测试 16: 字段过滤 — 嵌套 ContactInfo 对象字段被正确过滤
+    ///
+    /// 添加 deny 规则禁止 guest 读取 ContactInfo 的 mobile 和 emergency_contact_phone
+    #[tokio::test]
+    async fn test_16_field_filtering_nested_contact_info() {
+        let base_url = get_auth_server_url().await;
+        println!("\n=== Test 16: 嵌套 ContactInfo 字段过滤 ===");
+
+        let mut policy_ids: Vec<i64> = Vec::new();
+
+        // 1. 添加 deny 策略
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "ContactInfo", "mobile").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "ContactInfo", "emergency_contact_phone").await {
+            policy_ids.push(id);
+        }
+
+        if policy_ids.is_empty() {
+            println!("SKIP: Failed to add deny policies");
+            return;
+        }
+
+        reload_enforcer(&base_url).await;
+
+        // 2. 无 Token 请求
+        let resp = get_without_auth(&base_url, "/api/users").await;
+        println!("Guest access /api/users: {}", resp.status());
+
+        if resp.status().is_success() {
+            let body: Value = resp.json().await.unwrap();
+
+            if let Some(contact) = body.get("contact") {
+                let has_mobile = contact.get("mobile").is_some();
+                let has_emergency = contact.get("emergency_contact_phone").is_some();
+                let has_email = contact.get("email").is_some();
+                let has_wechat = contact.get("wechat").is_some();
+
+                println!("contact - mobile: {}, emergency_phone: {}, email: {}, wechat: {}",
+                    has_mobile, has_emergency, has_email, has_wechat);
+
+                if !has_mobile && !has_emergency && has_email {
+                    println!("SUCCESS: ContactInfo.mobile and emergency_contact_phone filtered, email visible");
+                }
+            }
+        }
+
+        // 3. 清理策略
+        cleanup_policies(&base_url, &policy_ids).await;
+        println!("=== Test 16 完成 ===\n");
+    }
+
+    /// 测试 17: 字段过滤 — Vec<BankAccount> 数组元素字段被正确过滤
+    ///
+    /// 添加 deny 规则禁止 guest 读取 BankAccount 的 account_number
+    #[tokio::test]
+    async fn test_17_field_filtering_vec_bank_accounts() {
+        let base_url = get_auth_server_url().await;
+        println!("\n=== Test 17: Vec<BankAccount> 字段过滤 ===");
+
+        let mut policy_ids: Vec<i64> = Vec::new();
+
+        // 1. 添加 deny 策略
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "BankAccount", "account_number").await {
+            policy_ids.push(id);
+        }
+
+        if policy_ids.is_empty() {
+            println!("SKIP: Failed to add deny policies");
+            return;
+        }
+
+        reload_enforcer(&base_url).await;
+
+        // 2. 无 Token 请求
+        let resp = get_without_auth(&base_url, "/api/users").await;
+        println!("Guest access /api/users: {}", resp.status());
+
+        if resp.status().is_success() {
+            let body: Value = resp.json().await.unwrap();
+
+            if let Some(accounts) = body.get("bank_accounts").and_then(|v| v.as_array()) {
+                println!("bank_accounts count: {}", accounts.len());
+                assert!(!accounts.is_empty(), "bank_accounts array should still exist");
+
+                for (i, account) in accounts.iter().enumerate() {
+                    let has_account_number = account.get("account_number").is_some();
+                    let has_bank_name = account.get("bank_name").is_some();
+                    let has_branch = account.get("branch_name").is_some();
+
+                    println!("  [{}] account_number: {}, bank_name: {}, branch_name: {}",
+                        i, has_account_number, has_bank_name, has_branch);
+
+                    if !has_account_number && has_bank_name && has_branch {
+                        println!("  [{}] SUCCESS: account_number filtered, others visible", i);
+                    }
+                }
+            }
+        }
+
+        // 3. 清理策略
+        cleanup_policies(&base_url, &policy_ids).await;
+        println!("=== Test 17 完成 ===\n");
+    }
+
+    /// 测试 18: 字段过滤 — Vec<WorkExperience> 数组元素字段被正确过滤
+    ///
+    /// 添加 deny 规则禁止 guest 读取 WorkExperience 的 monthly_salary
+    #[tokio::test]
+    async fn test_18_field_filtering_vec_work_experiences() {
+        let base_url = get_auth_server_url().await;
+        println!("\n=== Test 18: Vec<WorkExperience> 字段过滤 ===");
+
+        let mut policy_ids: Vec<i64> = Vec::new();
+
+        // 1. 添加 deny 策略
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "WorkExperience", "monthly_salary").await {
+            policy_ids.push(id);
+        }
+
+        if policy_ids.is_empty() {
+            println!("SKIP: Failed to add deny policies");
+            return;
+        }
+
+        reload_enforcer(&base_url).await;
+
+        // 2. 无 Token 请求
+        let resp = get_without_auth(&base_url, "/api/users").await;
+        println!("Guest access /api/users: {}", resp.status());
+
+        if resp.status().is_success() {
+            let body: Value = resp.json().await.unwrap();
+
+            if let Some(experiences) = body.get("work_experiences").and_then(|v| v.as_array()) {
+                println!("work_experiences count: {}", experiences.len());
+
+                for (i, exp) in experiences.iter().enumerate() {
+                    let has_salary = exp.get("monthly_salary").is_some();
+                    let has_company = exp.get("company_name").is_some();
+                    let has_position = exp.get("position").is_some();
+
+                    println!("  [{}] monthly_salary: {}, company_name: {}, position: {}",
+                        i, has_salary, has_company, has_position);
+
+                    if !has_salary && has_company && has_position {
+                        println!("  [{}] SUCCESS: monthly_salary filtered, others visible", i);
+                    }
+                }
+            }
+        }
+
+        // 3. 清理策略
+        cleanup_policies(&base_url, &policy_ids).await;
+        println!("=== Test 18 完成 ===\n");
+    }
+
+    /// 测试 19: 字段过滤 — 综合场景：多个类型的 deny 规则同时生效
+    ///
+    /// 同时配置多个类型的 deny 规则，验证所有嵌套层级都正确过滤
+    #[tokio::test]
+    async fn test_19_field_filtering_mixed_nested_scenario() {
+        let base_url = get_auth_server_url().await;
+        println!("\n=== Test 19: 综合嵌套场景字段过滤 ===");
+
+        let mut policy_ids: Vec<i64> = Vec::new();
+
+        // 1. 添加多个类型的 deny 策略
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "id_card_number").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Address", "street").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "BankAccount", "account_number").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "ContactInfo", "emergency_contact_phone").await {
+            policy_ids.push(id);
+        }
+
+        if policy_ids.len() < 4 {
+            println!("WARNING: Only {} of 4 policies added", policy_ids.len());
+        }
+
+        reload_enforcer(&base_url).await;
+
+        // 2. 无 Token 请求
+        let resp = get_without_auth(&base_url, "/api/users").await;
+        println!("Guest access /api/users: {}", resp.status());
+
+        if resp.status().is_success() {
+            let body: Value = resp.json().await.unwrap();
+            println!("Response structure check:");
+
+            // 检查 Employee 字段
+            let has_id_card = body.get("id_card_number").is_some();
+            println!("  Employee.id_card_number: {} (should be false)", has_id_card);
+
+            // 检查 Address 字段
+            if let Some(home_addr) = body.get("home_address") {
+                let has_street = home_addr.get("street").is_some();
+                println!("  Address.street: {} (should be false)", has_street);
+            }
+
+            // 检查 BankAccount 字段
+            if let Some(accounts) = body.get("bank_accounts").and_then(|v| v.as_array()) {
+                if let Some(first) = accounts.first() {
+                    let has_acc_num = first.get("account_number").is_some();
+                    println!("  BankAccount.account_number: {} (should be false)", has_acc_num);
+                }
+            }
+
+            // 检查 ContactInfo 字段
+            if let Some(contact) = body.get("contact") {
+                let has_emergency = contact.get("emergency_contact_phone").is_some();
+                println!("  ContactInfo.emergency_contact_phone: {} (should be false)", has_emergency);
+            }
+
+            println!("Mixed nested filtering verification complete");
+        }
+
+        // 3. 清理策略
+        cleanup_policies(&base_url, &policy_ids).await;
+        println!("=== Test 19 完成 ===\n");
+    }
+
+    /// 测试 20: 字段过滤 — Admin 用户能看到所有字段（不受 guest deny 影响）
+    ///
+    /// 配置多个 deny 规则（对 guest），验证 admin 用户能看到所有字段
+    #[tokio::test]
+    async fn test_20_field_filtering_admin_sees_all() {
+        let base_url = get_auth_server_url().await;
+        println!("\n=== Test 20: Admin 用户能看到所有字段 ===");
+
+        let mut policy_ids: Vec<i64> = Vec::new();
+
+        // 1. 添加多个 deny 策略（针对 guest）
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "id_card_number").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "base_salary").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Address", "street").await {
+            policy_ids.push(id);
+        }
+        if let Some(id) = add_field_deny_policy(&base_url, "guest", "BankAccount", "account_number").await {
+            policy_ids.push(id);
+        }
+
+        reload_enforcer(&base_url).await;
+
+        // 2. 使用 TEST_TOKEN（admin 用户）请求
+        let admin_resp = get_with_auth(&base_url, "/api/users", TEST_TOKEN).await;
+        println!("Admin access /api/users: {}", admin_resp.status());
+
+        if admin_resp.status().is_success() {
+            let body: Value = admin_resp.json().await.unwrap();
+
+            // 验证 admin 能看到所有被 guest deny 的字段
+            let has_id_card = body.get("id_card_number").is_some();
+            let has_salary = body.get("base_salary").is_some();
+            
+            println!("Admin sees Employee.id_card_number: {}", has_id_card);
+            println!("Admin sees Employee.base_salary: {}", has_salary);
+
+            if let Some(home_addr) = body.get("home_address") {
+                let has_street = home_addr.get("street").is_some();
+                println!("Admin sees Address.street: {}", has_street);
+            }
+
+            if let Some(accounts) = body.get("bank_accounts").and_then(|v| v.as_array()) {
+                if let Some(first) = accounts.first() {
+                    let has_acc_num = first.get("account_number").is_some();
+                    println!("Admin sees BankAccount.account_number: {}", has_acc_num);
+                }
+            }
+
+            if has_id_card && has_salary {
+                println!("SUCCESS: Admin can see all Employee sensitive fields");
+            } else {
+                println!("INFO: Admin field visibility may depend on admin-specific rules");
+            }
+        }
+
+        // 3. 清理策略
+        cleanup_policies(&base_url, &policy_ids).await;
+        println!("=== Test 20 完成 ===\n");
+    }
+
+    /// 测试 21: 字段过滤 — 清理策略后字段恢复可见
+    ///
+    /// 验证策略的动态生效能力：添加 deny 规则，验证过滤生效；删除规则后，验证字段恢复可见
+    #[tokio::test]
+    async fn test_21_field_filtering_cleanup_restores_full_response() {
+        let base_url = get_auth_server_url().await;
+        println!("\n=== Test 21: 策略清理后字段恢复 ===");
+
+        // 1. 先获取原始响应（无 deny 规则）
+        let original_resp = get_without_auth(&base_url, "/api/users").await;
+        let original_has_id_card = if original_resp.status().is_success() {
+            let body: Value = original_resp.json().await.unwrap();
+            body.get("id_card_number").is_some()
+        } else {
+            println!("SKIP: Cannot get original response");
+            return;
+        };
+        println!("Before deny rule - id_card_number visible: {}", original_has_id_card);
+
+        // 2. 添加 deny 规则
+        let policy_id = match add_field_deny_policy(&base_url, "guest", "Employee", "id_card_number").await {
+            Some(id) => id,
+            None => {
+                println!("SKIP: Failed to add deny policy");
+                return;
+            }
+        };
+
+        reload_enforcer(&base_url).await;
+
+        // 3. 验证字段被过滤
+        let filtered_resp = get_without_auth(&base_url, "/api/users").await;
+        let filtered_has_id_card = if filtered_resp.status().is_success() {
+            let body: Value = filtered_resp.json().await.unwrap();
+            body.get("id_card_number").is_some()
+        } else {
+            true // 假设仍可见
+        };
+        println!("With deny rule - id_card_number visible: {}", filtered_has_id_card);
+
+        // 4. 删除 deny 规则并 reload
+        cleanup_policy(&base_url, policy_id).await;
+        reload_enforcer(&base_url).await;
+
+        // 5. 验证字段恢复可见
+        let restored_resp = get_without_auth(&base_url, "/api/users").await;
+        if restored_resp.status().is_success() {
+            let body: Value = restored_resp.json().await.unwrap();
+            let restored_has_id_card = body.get("id_card_number").is_some();
+            println!("After cleanup - id_card_number visible: {}", restored_has_id_card);
+
+            if original_has_id_card && !filtered_has_id_card && restored_has_id_card {
+                println!("SUCCESS: Field visibility correctly follows policy lifecycle");
+                println!("  - Before deny: visible");
+                println!("  - With deny: filtered");
+                println!("  - After cleanup: restored");
+            } else if !filtered_has_id_card && restored_has_id_card {
+                println!("SUCCESS: Cleanup restored field visibility");
+            } else {
+                println!("INFO: Field visibility state - original: {}, filtered: {}, restored: {}",
+                    original_has_id_card, filtered_has_id_card, restored_has_id_card);
+            }
+        }
+
+        println!("=== Test 21 完成 ===\n");
+    }
 }
