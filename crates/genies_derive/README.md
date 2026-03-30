@@ -1,139 +1,350 @@
-# Genies Derive
+# genies_derive
 
-A powerful derive macro for configuration management in Rust, providing a flexible and type-safe way to handle application configurations.
+A powerful procedural macro library for the Genies framework, providing derive macros and attribute macros for DDD aggregates, domain events, configuration, Dapr topic consumption, HTTP request wrapping, and field-level permission control.
 
-## Features
+## Overview
 
-- 🔧 Default values via attributes
-- 🌍 Environment variable support
-- ✅ Configuration validation
-- 📁 YAML file configuration
-- 🔄 Hot reloading support
-- 🏗️ Builder pattern
-- 🔄 Type conversion
-- 📦 Array and Option type support
+genies_derive provides 7 key macros that simplify common patterns in DDD + Dapr + Casbin applications:
 
-## Installation
+| Macro | Type | Purpose |
+|-------|------|---------|
+| `#[derive(Aggregate)]` | Derive | DDD Aggregate root implementation |
+| `#[derive(DomainEvent)]` | Derive | Domain event type implementation |
+| `#[derive(Config)]` | Derive | Configuration loading from YAML/ENV |
+| `#[derive(ConfigCore)]` | Derive | Internal config (avoids circular deps) |
+| `#[topic(...)]` | Attribute | Dapr topic consumption with Redis idempotency |
+| `#[wrapper(...)]` | Attribute | HTTP request wrapping with JWT auto-refresh |
+| `#[casbin]` | Attribute | Field-level permission control |
 
-Add this to your `Cargo.toml`:
+## Quick Start
 
 ```toml
 [dependencies]
-genies_derive = "0.1.0"
+genies_derive = { path = "../path/to/genies_derive" }
+genies = { path = "../path/to/genies" }
 ```
 
-## Quick Start
+## Macro Reference
+
+### 1. `#[derive(Aggregate)]` - Aggregate Root
+
+Implements `AggregateType`, `WithAggregateId`, and optionally `InitializeAggregate` traits.
+
+**Attributes:**
+
+| Attribute | Required | Description |
+|-----------|----------|-------------|
+| `#[aggregate_type("Name")]` | No | Override aggregate type name (default: struct name) |
+| `#[id_field(field_name)]` | No | Specify the ID field |
+| `#[initialize_with_defaults]` | No | Generate `InitializeAggregate` impl (requires `id_field`) |
+
+**Example:**
+
+```rust
+use genies_derive::Aggregate;
+use serde::{Deserialize, Serialize};
+
+#[derive(Aggregate, Serialize, Deserialize, Default)]
+#[aggregate_type("Order")]
+#[id_field(id)]
+#[initialize_with_defaults]
+pub struct Order {
+    pub id: String,
+    pub status: String,
+    pub total_amount: f64,
+    pub items: Vec<OrderItem>,
+}
+
+// Generated traits:
+// - AggregateType::aggregate_type(&self) -> String  // Returns "Order"
+// - AggregateType::atype() -> String                // Static version
+// - WithAggregateId::aggregate_id(&self) -> &String
+// - InitializeAggregate::initialize(id: String) -> Order
+```
+
+### 2. `#[derive(DomainEvent)]` - Domain Event
+
+Implements `DomainEvent` trait for event sourcing patterns.
+
+**Attributes:**
+
+| Attribute | Required | Description |
+|-----------|----------|-------------|
+| `#[event_type("Name")]` | No | Override event type (default: struct/variant name) |
+| `#[event_type_version("V1")]` | No | Event version (default: "V0") |
+| `#[event_source("service")]` | No | Event source identifier (default: "") |
+
+**Struct Example:**
+
+```rust
+use genies_derive::DomainEvent;
+use serde::{Deserialize, Serialize};
+
+#[derive(DomainEvent, Serialize, Deserialize, Default)]
+#[event_type("OrderCreated")]
+#[event_type_version("V1")]
+#[event_source("order-service")]
+pub struct OrderCreatedEvent {
+    pub order_id: String,
+    pub customer_id: String,
+    pub total: f64,
+}
+
+// Generated: DomainEvent trait with event_type(), event_type_version(), event_source(), json()
+```
+
+**Enum Example:**
+
+```rust
+#[derive(DomainEvent, Serialize, Deserialize)]
+#[event_type_version("V1")]
+pub enum OrderEvent {
+    #[event_type("OrderCreated")]
+    Created { order_id: String },
+    
+    #[event_type("OrderShipped")]
+    Shipped { tracking_number: String },
+}
+```
+
+### 3. `#[derive(Config)]` - Configuration
+
+Generates configuration loading from YAML files and environment variables.
+
+**Field Attribute:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `#[config(default = "value")]` | Default value for the field |
+
+**Example:**
 
 ```rust
 use genies_derive::Config;
 use serde::{Deserialize, Serialize};
 
 #[derive(Config, Debug, Deserialize, Serialize)]
-struct ServerConfig {
+pub struct AppConfig {
     #[config(default = "localhost")]
-    host: String,
+    pub host: String,
     
-    #[config(default = 8080)]
-    #[config(validate(range(min = 1, max = 65535)))]
-    port: u16,
+    #[config(default = "8080")]
+    pub port: u16,
     
-    #[config(default = "topic1,topic2,topic3")]
-    topics: Vec<String>,
+    #[config(default = "topic1,topic2")]
+    pub topics: Vec<String>,
     
-    // Optional fields
-    username: Option<String>,
-    
-    #[config(default = "60")]
-    timeout_seconds: Option<u64>,
+    pub database_url: Option<String>,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load from file and environment variables
-    let config = ServerConfig::from_sources("config.yml")?;
-    println!("Config: {:?}", config);
-
-    Ok(())
-}
+// Generated methods:
+// - AppConfig::default() -> Self
+// - AppConfig::from_file(path: &str) -> Result<Self, ConfigError>
+// - AppConfig::from_sources(path: &str) -> Result<Self, ConfigError>
+// - AppConfig::load_env(&mut self) -> Result<(), ConfigError>
+// - AppConfig::merge(&mut self, other: Self)
+// - AppConfig::validate(&self) -> Result<(), ConfigError>
 ```
 
-## Configuration Sources
-
-Configurations are loaded in the following priority order (highest first):
-
-1. Environment variables
-2. Configuration file
-3. Default values
-4. None (for optional fields)
-
-### Environment Variables
-
-Field names are automatically converted to SCREAMING_SNAKE_CASE:
+**Environment Variable Support:**
 
 ```bash
-export HOST="production.example.com"
-export PORT="443"
-export TOPICS="prod/events,prod/logs,prod/metrics"
-export USERNAME="admin"
-export TIMEOUT_SECONDS="120"
+# Both formats supported:
+export host="production.example.com"     # lowercase
+export HOST="production.example.com"      # SCREAMING_SNAKE_CASE
 ```
 
-### YAML Configuration
+### 4. `#[derive(ConfigCore)]` - Internal Configuration
 
-```yaml
-host: "example.com"
-port: 8080
-topics:
-  - "topic1"
-  - "topic2"
-username: "user"
-timeout_seconds: 60
-```
+Same as `Config` but uses `genies_core::error::ConfigError` instead of `genies::core::error::ConfigError`. Used internally to avoid circular dependencies.
 
-## Features
+### 5. `#[topic(...)]` - Dapr Topic Consumption
 
-### Default Values
+Transforms an async function into a Dapr topic consumer with Redis-based idempotency.
+
+**Attributes:**
+
+| Attribute | Required | Description |
+|-----------|----------|-------------|
+| `name = "topic_name"` | No | Topic name (default: aggregate type) |
+| `pubsub = "pubsub_name"` | No | PubSub component (default: "messagebus") |
+| `metadata = "k1=v1,k2=v2"` | No | Topic metadata |
+
+**Example:**
 
 ```rust
-#[config(default = "localhost")]
-host: String
+use genies_derive::topic;
+use rbatis::executor::Executor;
+
+#[topic(name = "order-events", pubsub = "messagebus")]
+pub async fn handle_order_created(
+    tx: &mut dyn Executor,
+    event: OrderCreatedEvent,
+) -> anyhow::Result<u64> {
+    // Process the event
+    Order::insert(tx, &order).await?;
+    Ok(1)
+}
 ```
 
-### Validation
+**Generated Code:**
+
+1. **Handler Function**: `handle_order_created(tx, event)` - Your business logic
+2. **Salvo Handler**: `handle_order_created_hoop` - HTTP handler for Dapr
+3. **Dapr Config**: `handle_order_created_dapr()` - Returns `DaprTopicSubscription`
+4. **Router**: `handle_order_created_hoop_router()` - Salvo router
+5. **Auto-registration**: Via `inventory::submit!`
+
+**Idempotency Flow:**
+
+```
+Dapr Message → Parse CloudEvent → Extract event_type
+     ↓
+Check Redis key: {server}-{handler}-{event_type}-{message_id}
+     ↓
+If CONSUMING: retry later
+If CONSUMED: skip
+If not exists: SET NX (atomic) → process → SET CONSUMED
+```
+
+### 6. `#[wrapper(...)]` - HTTP Request Wrapper
+
+Wraps feignhttp requests with automatic JWT token refresh on 401 errors.
+
+**Example:**
 
 ```rust
-#[config(validate(range(min = 1, max = 65535)))]
-port: u16
+use genies_derive::wrapper;
+use feignhttp::get;
+
+#[wrapper]
+#[get("${GATEWAY}/api/patients/{id}")]
+pub async fn get_patient(#[path] id: String) -> Result<Patient, Error> {
+    // feignhttp implementation
+}
 ```
 
-### Arrays
+**Generated Code:**
 
 ```rust
-#[config(default = "topic1,topic2,topic3")]
-topics: Vec<String>
+// Original function with Authorization header
+pub async fn get_patient_feignhttp(
+    #[header] Authorization: &str,
+    #[path] id: String
+) -> Result<Patient, Error> { ... }
+
+// Wrapper function with auto token refresh
+pub async fn get_patient(id: String) -> Result<Patient, Error> {
+    let bearer = format!("Bearer {}", REMOTE_TOKEN.lock().unwrap().access_token);
+    let result = get_patient_feignhttp(&bearer, id).await;
+    
+    if result.is_err() && error.contains("401 Unauthorized") {
+        // Refresh token from Keycloak
+        let new_token = get_temp_access_token(...).await?;
+        REMOTE_TOKEN.lock().unwrap().access_token = new_token;
+        return get_patient_feignhttp(&new_bearer, id).await;
+    }
+    result
+}
 ```
 
-### Optional Fields
+### 7. `#[casbin]` - Field-Level Permission Control
+
+Generates custom `Serialize` and Salvo `Writer` implementations for field-level permission filtering.
+
+**Example:**
 
 ```rust
-username: Option<String>
+use genies_derive::casbin;
+use serde::Deserialize;
+use salvo::oapi::ToSchema;
+
+#[casbin]
+#[derive(Deserialize, ToSchema)]
+pub struct User {
+    pub id: u64,
+    pub name: String,
+    pub email: String,      // Can be filtered by policy
+    pub phone: String,      // Can be filtered by policy
+    pub address: Address,   // Nested type - auto-detected
+    pub accounts: Vec<BankAccount>,  // Vec type - auto-detected
+}
 ```
 
-### Hot Reloading
+**Auto Nested Detection:**
+
+The macro automatically detects non-primitive types and recursively filters them:
+- Plain struct fields: `Address`
+- Option wrapped: `Option<Address>`
+- Vec wrapped: `Vec<BankAccount>`
+
+**Generated Code:**
 
 ```rust
-let mut config = ServerConfig::from_sources("config.yml")?;
-config.reload().await?;
+impl User {
+    pub fn casbin_filter(
+        value: &mut serde_json::Value,
+        enforcer: &casbin::Enforcer,
+        subject: &str,
+    ) {
+        // 1. Filter own fields
+        // 2. Recursively filter nested fields
+    }
+}
+
+#[async_trait]
+impl salvo::writing::Writer for User {
+    async fn write(self, req, depot, res) {
+        let enforcer = depot.get::<Arc<Enforcer>>("casbin_enforcer");
+        let subject = depot.get::<String>("casbin_subject");
+        
+        let mut value = serde_json::to_value(&self)?;
+        Self::casbin_filter(&mut value, enforcer, subject);
+        res.render(Json(value));
+    }
+}
 ```
 
-## Examples
+**Policy Examples:**
 
-Check out the [examples](examples/) directory for more detailed examples.
+```sql
+-- Deny bob from reading User.email field
+INSERT INTO casbin_rules (ptype, v0, v1, v2, v3) 
+VALUES ('p', 'bob', 'User.email', 'read', 'deny');
 
-## Contributing
+-- Deny guest role from reading phone fields
+INSERT INTO casbin_rules (ptype, v0, v1, v2, v3) 
+VALUES ('p', 'guest', 'User.phone', 'read', 'deny');
+```
 
-We welcome contributions! Please feel free to submit a Pull Request.
+## Dependencies
+
+- **proc-macro2** / **quote** / **syn** - Procedural macro infrastructure
+- **genies_core** - Error types for ConfigCore
+- **serde** / **serde_yaml** - Configuration parsing
+- **convert_case** - Environment variable name conversion
+- **async-trait** - Async trait support
+
+## Integration with Other Crates
+
+| Macro | Integrates With |
+|-------|-----------------|
+| `Aggregate` | `genies_ddd::aggregate` traits |
+| `DomainEvent` | `genies_ddd::event` traits |
+| `Config` / `ConfigCore` | `genies_core::error::ConfigError` |
+| `#[topic]` | `genies_dapr`, `genies_context::CONTEXT`, Redis |
+| `#[wrapper]` | `genies_core::jwt`, `genies_context::REMOTE_TOKEN` |
+| `#[casbin]` | `genies_auth`, `casbin::Enforcer`, Salvo |
+
+## Debug Mode
+
+Enable `debug_mode` feature to print generated code during compilation:
+
+```toml
+[dependencies]
+genies_derive = { path = "...", features = ["debug_mode"] }
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT

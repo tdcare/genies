@@ -1,115 +1,302 @@
-# Context 模块
+# genies_context
 
-`context` 模块负责处理应用程序的上下文信息，包括应用上下文、认证和授权管理。该模块帮助开发者在应用程序中轻松管理全局状态、用户会话和权限。
+Genies 框架的应用上下文管理库，提供全局上下文、数据库连接、缓存服务和跨服务认证。
 
-## 功能概述
-- **应用上下文**: 管理应用程序的全局状态和配置。
-- **认证上下文**: 管理用户认证信息，包括用户身份和权限。
-- **授权管理**: 提供权限验证功能，确保用户只能访问其有权访问的资源。
+## 概述
 
-## 使用说明
+genies_context 提供应用运行时上下文的集中管理，包括数据库连接池、缓存服务、Keycloak 认证密钥和跨服务 Token 管理。使用 `lazy_static` 模式在整个应用中提供全局单例访问。
 
-### 应用上下文
-`app_context.rs` 中定义了应用上下文结构体 `ApplicationContext`，用于管理应用程序的全局状态和配置。
+## 核心特性
 
-```rust
-use context::app_context::ApplicationContext;
+- **全局上下文单例**：`CONTEXT` 提供对配置、数据库和缓存的访问
+- **数据库连接池**：通过 RBatis 实现异步 MySQL 连接池
+- **缓存服务**：Redis 支持的缓存，分离数据缓存和持久化缓存通道
+- **Keycloak 集成**：JWT 密钥获取和 Token 验证
+- **跨服务 Token**：`REMOTE_TOKEN` 用于服务间认证
+- **K8s 健康状态**：`SERVICE_STATUS` 用于就绪/存活探针
+- **Salvo 认证中间件**：`salvo_auth` 用于 JWT 认证
 
-let app_context = ApplicationContext::new();
-app_context.set_config("key", "value").unwrap();
-let config_value = app_context.get_config("key").unwrap();
-println!("Config value: {}", config_value);
+## 架构设计
+
+### 核心组件
+
+| 组件 | 文件 | 功能 |
+|------|------|------|
+| `ApplicationContext` | app_context.rs | 主上下文结构，包含配置、rbatis、缓存服务 |
+| `CONTEXT` | lib.rs | 通过 `lazy_static` 实现的全局单例 |
+| `REMOTE_TOKEN` | lib.rs | 跨服务 Token 存储（`Mutex<RemoteToken>`） |
+| `SERVICE_STATUS` | lib.rs | K8s 探针状态（`Mutex<HashMap>`） |
+| `init_mysql` | app_context.rs | 异步数据库连接池初始化 |
+| `RemoteToken` | app_context.rs | 服务间认证 Token |
+| `salvo_auth` | auth.rs | Salvo JWT 认证中间件 |
+| `checked_token` | auth.rs | Token 验证函数 |
+| `is_white_list_api` | auth.rs | API 白名单检查 |
+
+### 初始化流程
+
+```
+应用启动 → CONTEXT (lazy_static) → init_mysql() → 就绪
+                │
+                ├── ApplicationConfig (./application.yml)
+                ├── Keycloak Keys (异步获取)
+                ├── CacheService (Redis)
+                └── RBatis (MySQL 连接池)
 ```
 
-### 认证上下文
-`auth.rs` 中定义了认证上下文结构体 `AuthContext`，用于管理用户认证信息。
+## 快速开始
 
-```rust
-use context::auth::AuthContext;
+### 1. 添加依赖
 
-let auth_context = AuthContext::new();
-let user = auth_context.authenticate("token").unwrap();
-println!("Authenticated user: {:?}", user);
+```toml
+[dependencies]
+genies_context = { path = "../path/to/genies_context" }
+genies_config = { path = "../path/to/genies_config" }
+genies_cache = { path = "../path/to/genies_cache" }
+genies_core = { path = "../path/to/genies_core" }
+rbatis = "4.x"
 ```
 
-### 授权管理
-`auth.rs` 中提供了权限验证功能，确保用户只能访问其有权访问的资源。
+### 2. 初始化数据库
 
 ```rust
-use context::auth::AuthContext;
+use genies::context::CONTEXT;
 
-let auth_context = AuthContext::new();
-let has_access = auth_context.has_permission("user_id", "resource_id").unwrap();
-println!("Has access: {}", has_access);
-```
-
-## 详细说明
-
-### `app_context.rs`
-- **ApplicationContext**: 应用上下文结构体，包含以下字段：
-  - `config`: 应用程序的配置项，类型为 `ApplicationConfig`。
-  - `rbatis`: 数据库操作对象，类型为 `RBatis`。
-  - `cache_service`: 缓存服务对象，类型为 `CacheService`。
-  - `redis_save_service`: 可持久化的 Redis 缓存服务对象，类型为 `CacheService`。
-  - `keycloak_keys`: Keycloak 认证密钥，类型为 `Keys`。
-
-### `lib.rs`
-- **全局变量初始化**: 在 `lib.rs` 中定义了全局变量 `APP_CONTEXT`，并使用 `lazy_static` 宏进行初始化。`lazy_static` 宏确保全局变量在首次访问时进行初始化，并且在整个应用程序生命周期中保持单例。
-
-```rust
-use context::app_context::ApplicationContext;
-use lazy_static::lazy_static;
-
-lazy_static! {
-    pub static ref APP_CONTEXT: ApplicationContext = ApplicationContext::new();
+#[tokio::main]
+async fn main() {
+    // 初始化 MySQL 连接池（线程安全，只执行一次）
+    CONTEXT.init_mysql().await;
+    
+    // 现在可以使用 CONTEXT.rbatis
+    println!("数据库已连接: {:?}", CONTEXT.rbatis.get_pool().unwrap().state().await);
 }
 ```
 
-### `ApplicationContext` 的 `new()` 方法实现
-`ApplicationContext` 的 `new()` 方法用于创建一个新的 `ApplicationContext` 实例。以下是 `new()` 方法的详细实现过程：
-
-1. **创建实例**: `new()` 方法首先创建一个新的 `ApplicationContext` 实例。
-2. **初始化字段**:
-   - `config`: 初始化 `ApplicationConfig` 实例，用于存储应用程序的配置项。
-   - `rbatis`: 初始化 `RBatis` 实例，用于数据库操作。
-   - `cache_service`: 初始化 `CacheService` 实例，用于缓存服务。
-   - `redis_save_service`: 初始化 `CacheService` 实例，用于可持久化的 Redis 缓存服务。
-   - `keycloak_keys`: 初始化 `Keys` 实例，用于 Keycloak 认证密钥。
-3. **返回实例**: 最后，`new()` 方法返回初始化后的 `ApplicationContext` 实例。
+### 3. 使用数据库连接
 
 ```rust
+use genies::context::CONTEXT;
+use rbatis::executor::Executor;
+
+pub async fn query_users() -> Vec<User> {
+    let rb = &CONTEXT.rbatis;
+    User::select_all(rb).await.unwrap()
+}
+
+// 使用事务
+pub async fn create_user(user: &User) {
+    let mut tx = CONTEXT.rbatis.acquire_begin().await.unwrap();
+    User::insert(&mut tx, user).await.unwrap();
+    tx.commit().await.unwrap();
+}
+```
+
+### 4. 使用缓存服务
+
+```rust
+use genies::context::CONTEXT;
+
+pub async fn cache_example() {
+    // 使用 cache_service（标准缓存）
+    CONTEXT.cache_service.set_string("key", "value").await.unwrap();
+    let value = CONTEXT.cache_service.get_string("key").await.unwrap();
+    
+    // 使用 redis_save_service（持久化缓存）
+    CONTEXT.redis_save_service.set_string("persistent_key", "data").await.unwrap();
+}
+```
+
+### 5. 配置 Salvo 认证中间件
+
+```rust
+use genies::context::auth::salvo_auth;
+use salvo::prelude::*;
+
+let router = Router::new()
+    .hoop(salvo_auth)  // JWT 认证中间件
+    .push(Router::with_path("/api/users").get(get_users));
+```
+
+## API 参考
+
+### ApplicationContext 结构体
+
+```rust
+pub struct ApplicationContext {
+    /// 来自 ./application.yml 的应用配置
+    pub config: ApplicationConfig,
+    
+    /// RBatis 数据库连接池
+    pub rbatis: RBatis,
+    
+    /// 标准缓存服务（Redis）
+    pub cache_service: CacheService,
+    
+    /// 持久化缓存服务（Redis）
+    pub redis_save_service: CacheService,
+    
+    /// Keycloak JWT 验证密钥
+    pub keycloak_keys: Keys,
+}
+
 impl ApplicationContext {
-    pub fn new() -> Self {
-        ApplicationContext {
-            config: ApplicationConfig::new(),
-            rbatis: RBatis::new(),
-            cache_service: CacheService::new(),
-            redis_save_service: CacheService::new(),
-            keycloak_keys: Keys::new(),
-        }
-    }
+    /// 初始化 MySQL 连接池（线程安全，幂等）
+    pub async fn init_mysql(&self);
+    
+    /// 创建新的 ApplicationContext（读取 ./application.yml）
+    pub fn new() -> Self;
 }
 ```
 
-### 全局变量中存储的内容
-- **配置项**: 存储在 `config` 字段中，类型为 `ApplicationConfig`。
-- **数据库操作对象**: 存储在 `rbatis` 字段中，类型为 `RBatis`。
-- **缓存服务对象**: 存储在 `cache_service` 字段中，类型为 `CacheService`。
-- **可持久化的 Redis 缓存服务对象**: 存储在 `redis_save_service` 字段中，类型为 `CacheService`。
-- **Keycloak 认证密钥**: 存储在 `keycloak_keys` 字段中，类型为 `Keys`。
-
-### 使用全局变量
-你可以在应用程序的任何地方使用 `APP_CONTEXT` 全局变量来访问应用上下文。
+### 全局单例
 
 ```rust
-use context::APP_CONTEXT;
-
-let config_value = APP_CONTEXT.get_config("key").unwrap();
-println!("Config value: {}", config_value);
+lazy_static! {
+    /// 全局应用上下文（数据库、缓存、配置）
+    pub static ref CONTEXT: ApplicationContext = ApplicationContext::default();
+    
+    /// 跨服务访问 Token 存储
+    pub static ref REMOTE_TOKEN: Mutex<RemoteToken> = Mutex::new(RemoteToken::new());
+    
+    /// K8s 服务健康状态
+    pub static ref SERVICE_STATUS: Mutex<HashMap<String, bool>> = Mutex::new({
+        let mut map = HashMap::new();
+        map.insert("readinessProbe".to_string(), true);
+        map.insert("livenessProbe".to_string(), true);
+        map
+    });
+}
 ```
 
-## 贡献
-欢迎提交 Pull Request 或 Issue 来改进本项目。
+### RemoteToken 结构体
+
+```rust
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct RemoteToken {
+    pub access_token: String,
+}
+
+impl RemoteToken {
+    /// 从 Keycloak 获取创建新的 RemoteToken
+    pub fn new() -> Self;
+}
+```
+
+### 认证函数
+
+```rust
+/// 检查路径是否在 API 白名单中
+pub fn is_white_list_api(context: &ApplicationContext, path: &str) -> bool;
+
+/// 验证 Token 并返回 JWTToken
+pub async fn checked_token(
+    context: &ApplicationContext,
+    token: &str,
+    path: &str,
+) -> Result<JWTToken, Error>;
+
+/// 检查授权（当前返回 Ok）
+pub async fn check_auth(
+    context: &ApplicationContext,
+    token: &JWTToken,
+    path: &str,
+) -> Result<(), Error>;
+
+/// Salvo JWT 认证中间件
+#[handler]
+pub async fn salvo_auth(
+    req: &mut Request,
+    depot: &mut Depot,
+    res: &mut Response,
+    ctrl: &mut FlowCtrl,
+);
+```
+
+## 配置说明
+
+### application.yml 结构
+
+```yaml
+server_url: "0.0.0.0:5800"
+database_url: "mysql://user:pass@localhost:3306/db"
+max_connections: 10
+wait_timeout: 30
+max_lifetime: 3600
+
+# Redis
+redis_host: "localhost"
+redis_port: 6379
+
+# Keycloak
+keycloak_auth_server_url: "http://localhost:8080"
+keycloak_realm: "myrealm"
+keycloak_resource: "myapp"
+keycloak_credentials_secret: "secret"
+
+# 白名单 API（跳过认证）
+white_list_api:
+  - "/health"
+  - "/dapr/*"
+  - "/swagger-ui/*"
+```
+
+## 认证中间件流程
+
+```
+请求 → salvo_auth
+    │
+    ├── is_white_list_api? → 是 → 继续（跳过认证）
+    │
+    └── 否 → checked_token()
+               │
+               ├── 有效 → check_auth() → depot.insert("jwtToken", token)
+               │                              → 继续
+               │
+               └── 无效 → 401 Unauthorized
+```
+
+## K8s 健康状态
+
+```rust
+use genies::context::SERVICE_STATUS;
+
+// 更新就绪状态
+{
+    let mut status = SERVICE_STATUS.lock().unwrap();
+    status.insert("readinessProbe".to_string(), false);
+}
+
+// 检查存活状态
+{
+    let status = SERVICE_STATUS.lock().unwrap();
+    let is_alive = *status.get("livenessProbe").unwrap_or(&false);
+}
+```
+
+## 依赖项
+
+- **genies_config** - 应用配置
+- **genies_cache** - 缓存服务抽象
+- **genies_core** - JWT 工具、错误类型
+- **rbatis** - ORM 框架
+- **rbdc-mysql** - MySQL 驱动
+- **lazy_static** - 全局单例模式
+- **tokio** - 异步运行时
+- **salvo** - Web 框架（用于认证中间件）
+
+## 与其他 Crate 集成
+
+- **genies_auth**：使用 `CONTEXT.rbatis` 存储策略，使用 `salvo_auth` 进行 JWT 验证
+- **genies_ddd**：使用 `CONTEXT.rbatis` 发布事件
+- **genies_dapr**：使用 `CONTEXT.rbatis` 进行事务管理
+- **genies_config**：为上下文初始化提供 `ApplicationConfig`
+
+## 线程安全
+
+- `CONTEXT`：`lazy_static` 确保单次初始化，字段是线程安全的
+- `init_mysql()`：使用 `Once` 实现幂等初始化
+- `REMOTE_TOKEN`：`Mutex<RemoteToken>` 实现线程安全访问
+- `SERVICE_STATUS`：`Mutex<HashMap>` 实现线程安全状态更新
 
 ## 许可证
-本项目采用 MIT 许可证，详情请参阅 `LICENSE` 文件。 
+
+请参阅项目根目录的许可证信息。
