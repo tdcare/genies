@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use log::error;
-use redis::aio::Connection;
+use redis::aio::MultiplexedConnection;
 
 use crate::cache_service::ICacheService;
 use async_trait::async_trait;
@@ -29,8 +29,8 @@ impl RedisService {
         Self { client }
     }
 
-    pub async fn get_conn(&self) -> Result<Connection> {
-        let conn = self.client.get_async_connection().await;
+    pub async fn get_conn(&self) -> Result<MultiplexedConnection> {
+        let conn = self.client.get_multiplexed_async_connection().await;
         if conn.is_err() {
             let err = format!("RedisService connect fail:{}", conn.err().unwrap());
             error!("{}", err);
