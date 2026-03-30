@@ -152,36 +152,29 @@ pub struct KeyCloakAccessToken {
     pub scope: Option<String>,
 }
 
-pub async fn get_keycloak_keys(keycloak_auth_server_url: &str, keycloak_realm: &str) -> Keys {
-    // let keycloak_auth_server_url=&config.keycloak_auth_server_url;
-    // let keycloak_realm=&config.keycloak_realm;
+pub async fn get_keycloak_keys(keycloak_auth_server_url: &str, keycloak_realm: &str) -> Result<Keys, Error> {
     let c = format!(
         "{}realms/{}/protocol/openid-connect/certs",
         keycloak_auth_server_url, keycloak_realm
     );
-    log::info!("开始访问keycloak:{}",c);
+    log::info!("开始访问keycloak:{}", c);
 
-    // use hyper::*;
-    // let client = Client::new();
-    // let res = client.get(<Uri as std::str::FromStr>::from_str(&c).unwrap()).await.unwrap();
-    // let buf = hyper::body::to_bytes(res).await.unwrap();
-    // let  keys= serde_json::from_slice::<Keys>(&buf).unwrap();
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| Error::from(format!("Failed to build HTTP client: {}", e)))?;
 
+    let keys: Keys = client.get(&c)
+        .send()
+        .await
+        .map_err(|e| Error::from(format!("Failed to fetch keycloak keys: {}", e)))?
+        .json()
+        .await
+        .map_err(|e| Error::from(format!("Failed to parse keycloak keys: {}", e)))?;
 
-    let keys: Keys = surf::get(c.clone()).recv_json().await.unwrap();
-    // log::info!("取到了keycloak certs:{:?}", &keys);
-
-
-
-
-    // let body=reqwest::get(c.clone()).await.unwrap().text().await.unwrap();
-    // log::info!("{}开始访问body:{:?}",c.clone(),body);
-
-    // let keys: Keys = reqwest::get(c.clone()).await.unwrap().json().await.unwrap();
     log::info!("取到了keycloak certs:{:?}", &keys);
 
-
-    return keys;
+    Ok(keys)
 }
 
 pub async fn get_temp_access_token(
@@ -189,12 +182,11 @@ pub async fn get_temp_access_token(
     keycloak_realm: &str,
     keycloak_resource: &str,
     keycloak_credentials_secret: &str,
-) -> String {
+) -> Result<String, Error> {
     let keycloak_url = format!(
         "{}realms/{}/protocol/openid-connect/token",
         keycloak_auth_server_url, keycloak_realm
     );
-
 
     let body_str = format!(
         "client_id={}&client_secret={}&grant_type=client_credentials",
@@ -205,24 +197,25 @@ pub async fn get_temp_access_token(
         &keycloak_url, &body_str
     );
 
-    let access_token: KeyCloakAccessToken = surf::post(keycloak_url)
-        .body_string(body_str)
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| Error::from(format!("Failed to build HTTP client: {}", e)))?;
+
+    let access_token: KeyCloakAccessToken = client
+        .post(&keycloak_url)
         .header("Content-Type", "application/x-www-form-urlencoded")
-        .recv_json()
+        .body(body_str)
+        .send()
         .await
-        .unwrap();
-
-
-    // let body=[("client_id",keycloak_resource),("client_secret",keycloak_credentials_secret),("grant_type","client_credentials")];
-    // let response = reqwest::Client::new()
-    //     .post(keycloak_url)
-    //     .form(&body)
-    //     .send()
-    //     .await
-    //     .expect("send");
-    //
-    // let access_token: KeyCloakAccessToken = response.json().await.unwrap();
+        .map_err(|e| Error::from(format!("Failed to request access token: {}", e)))?
+        .json()
+        .await
+        .map_err(|e| Error::from(format!("Failed to parse access token: {}", e)))?;
 
     debug!("取到了临时access_token:{:?}", &access_token);
-    return access_token.access_token.unwrap();
+
+    access_token
+        .access_token
+        .ok_or_else(|| Error::from("Access token is missing in response"))
 }

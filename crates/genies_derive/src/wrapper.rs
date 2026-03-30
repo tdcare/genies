@@ -79,15 +79,16 @@ pub(crate) fn impl_wrapper(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenSt
         } else {
             let err = feignhttp_return.as_ref().err().unwrap();
             if err.to_string().contains("401 Unauthorized") {
-                let remote_token_new = genies::core::jwt::get_temp_access_token(
+                if let Ok(remote_token_new) = genies::core::jwt::get_temp_access_token(
                     &genies::context::CONTEXT.config.keycloak_auth_server_url,
                     &genies::context::CONTEXT.config.keycloak_realm,
                     &genies::context::CONTEXT.config.keycloak_resource,
                     &genies::context::CONTEXT.config.keycloak_credentials_secret,
-                ).await;
-                genies::context::REMOTE_TOKEN.lock().unwrap().access_token = remote_token_new.clone();
-                let bearer = format!("Bearer {}", &remote_token_new);
-                feignhttp_return =  #feignhttp_ident( &bearer #func_args_do).await;
+                ).await {
+                    genies::context::REMOTE_TOKEN.lock().unwrap().access_token = remote_token_new.clone();
+                    let bearer = format!("Bearer {}", &remote_token_new);
+                    feignhttp_return = #feignhttp_ident( &bearer #func_args_do).await;
+                }
             }
             feignhttp_return
         }

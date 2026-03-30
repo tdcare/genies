@@ -21,16 +21,22 @@ pub struct RemoteToken {
 impl RemoteToken {
    pub fn new() -> Self {
         let config = ApplicationConfig::from_sources("./application.yml").unwrap();
+        let url = config.keycloak_auth_server_url.clone();
+        let realm = config.keycloak_realm.clone();
+        let resource = config.keycloak_resource.clone();
+        let secret = config.keycloak_credentials_secret.clone();
         Self {
-            access_token: futures::executor::block_on(async {
-                get_temp_access_token(
-                    &config.keycloak_auth_server_url,
-                    &config.keycloak_realm,
-                    &config.keycloak_resource,
-                    &config.keycloak_credentials_secret,
-                )
-                    .await
-            }),
+            access_token: std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    get_temp_access_token(&url, &realm, &resource, &secret)
+                        .await
+                        .unwrap_or_else(|e| {
+                            log::error!("Failed to get temp access token: {}", e);
+                            String::new()
+                        })
+                })
+            }).join().unwrap(),
         }
     }
 }
@@ -84,10 +90,16 @@ impl ApplicationContext {
         let config = ApplicationConfig::from_sources("./application.yml").unwrap();
         log::debug!("config = {:?}", config);
        
+        let auth_url = config.keycloak_auth_server_url.clone();
+        let auth_realm = config.keycloak_realm.clone();
         ApplicationContext {
-            keycloak_keys: futures::executor::block_on(async {
-                get_keycloak_keys(&config.keycloak_auth_server_url, &config.keycloak_realm).await
-            }),
+            keycloak_keys: std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async {
+                    get_keycloak_keys(&auth_url, &auth_realm).await
+                })
+            }).join().unwrap()
+                .expect("Failed to get keycloak keys"),
             rbatis: RBatis::new(),
             cache_service: CacheService::new(&config),
             redis_save_service: CacheService::new_saved(&config),

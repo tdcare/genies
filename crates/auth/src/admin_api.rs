@@ -811,23 +811,25 @@ pub async fn get_access_token() -> Json<ApiResponse<TokenResponse>> {
 
     let config = &CONTEXT.config;
 
-    let token = get_temp_access_token(
+    match get_temp_access_token(
         &config.keycloak_auth_server_url,
         &config.keycloak_realm,
         &config.keycloak_resource,
         &config.keycloak_credentials_secret,
     )
-    .await;
-
-    if !token.is_empty() {
-        let token_resp = TokenResponse {
-            access_token: token,
-            expires_in: 900,
-            token_type: "Bearer".to_string(),
-        };
-        Json(ApiResponse::ok(token_resp))
-    } else {
-        Json(ApiResponse::err("获取 Token 失败"))
+    .await {
+        Ok(token) => {
+            let token_resp = TokenResponse {
+                access_token: token,
+                expires_in: 900,
+                token_type: "Bearer".to_string(),
+            };
+            Json(ApiResponse::ok(token_resp))
+        }
+        Err(e) => {
+            log::error!("获取 Token 失败: {}", e);
+            Json(ApiResponse::err("获取 Token 失败"))
+        }
     }
 }
 
