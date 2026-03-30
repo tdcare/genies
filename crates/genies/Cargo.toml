@@ -31,6 +31,16 @@ rbs = {workspace =true}
 rbdc = {workspace =true}
 #yaml-rust = "0"
 
+[features]
+default = ["genies_context/mysql"]
+mysql = ["genies_context/mysql"]
+postgres = ["genies_context/postgres"]
+sqlite = ["genies_context/sqlite"]
+mssql = ["genies_context/mssql"]
+oracle = ["genies_context/oracle"]
+tdengine = ["genies_context/tdengine"]
+all-db = ["genies_context/all-db"]
+
 
 
 

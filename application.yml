@@ -23,7 +23,13 @@ redis_url: "redis://:Tdcare@127.0.0.1:6379"
 #可持久化redis地址(cache_type为"redis"时有效)
 redis_save_url: "redis://:Tdcare@127.0.0.1:6379"
 
-#数据库地址   root:root@127.0.0.1:3306/baseinfo_service
+# 数据库连接 URL，支持以下格式（需启用对应 feature）：
+#   MySQL:      mysql://user:pass@host:3306/dbname
+#   PostgreSQL: postgres://user:pass@host:5432/dbname
+#   SQLite:     sqlite://path/to/db.sqlite
+#   MSSQL:      mssql://user:pass@host:1433/dbname
+#   Oracle:     oracle://user:pass@host:1521/dbname
+#   TDengine:   taos+ws://host:6041/dbname
 database_url: "mysql://root:Tdcarefor123@127.0.0.1:3306/baseinfo_service"
 
 #数据库连接池参数

@@ -36,9 +36,23 @@ salvo = {workspace =true}
 rbatis = {workspace =true} #必选
 rbs = {workspace =true}
 rbdc =  {workspace =true}
-rbdc-mysql= {workspace =true}
+rbdc-mysql = { workspace = true, optional = true }
+rbdc-pg = { workspace = true, optional = true }
+rbdc-sqlite = { workspace = true, optional = true }
+rbdc-mssql = { workspace = true, optional = true }
+rbdc-oracle = { workspace = true, optional = true }
+rbdc-tdengine = { workspace = true, optional = true }
 inventory = { workspace = true }
 
+[features]
+default = ["mysql"]
+mysql = ["rbdc-mysql"]
+postgres = ["rbdc-pg"]
+sqlite = ["rbdc-sqlite"]
+mssql = ["rbdc-mssql"]
+oracle = ["rbdc-oracle"]
+tdengine = ["rbdc-tdengine"]
+all-db = ["mysql", "postgres", "sqlite", "mssql", "oracle", "tdengine"]
 
 [dev-dependencies]
 

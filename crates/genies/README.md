@@ -9,6 +9,7 @@ genies is the central hub crate that re-exports all Genies framework components,
 ## Features
 
 - **Unified Re-exports**: Access all sub-crates (core, config, context, cache, dapr, ddd, k8s) through a single import
+- **Multi-Database Support**: Feature flags for MySQL, PostgreSQL, SQLite, MSSQL, Oracle, TDengine (forwarded to genies_context)
 - **Database Macros**: Convenient macros for RBatis connection pool and transaction management
 - **Object Copying**: JSON-based field copying between different struct types
 - **Dapr Integration**: Gateway URL configuration for service-to-service communication
@@ -62,6 +63,28 @@ use genies::context::CONTEXT;  // Global application context
 use genies::cache;      // Caching services
 use genies::dapr;       // Dapr integration
 use genies::ddd;        // DDD primitives
+```
+
+### 3. Database Feature Flags
+
+genies forwards database feature flags to genies_context:
+
+| Feature | Description |
+|---------|-------------|
+| `mysql` (default) | MySQL driver |
+| `postgres` | PostgreSQL driver |
+| `sqlite` | SQLite driver |
+| `mssql` | MSSQL driver |
+| `oracle` | Oracle driver |
+| `tdengine` | TDengine driver |
+| `all-db` | All database drivers |
+
+**Switch database:**
+
+```toml
+# Use PostgreSQL instead of default MySQL
+[dependencies]
+genies = { version = "1.5", default-features = false, features = ["postgres"] }
 ```
 
 ## Macro Reference
@@ -189,8 +212,8 @@ struct Order {
 }
 
 async fn create_order(cmd: CreateOrderCommand) -> Result<Order, Error> {
-    // Initialize context
-    CONTEXT.init_mysql().await;
+    // Initialize context (auto-selects driver based on database_url)
+    CONTEXT.init_database().await;
     
     // Use transaction with auto-rollback
     let mut tx = tx_defer!();

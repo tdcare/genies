@@ -11,7 +11,8 @@ genies_context 是 Genies 框架的应用上下文管理库，提供全局上下
 
 **核心特性：**
 - 全局上下文单例（CONTEXT）
-- MySQL 连接池（RBatis）
+- 多数据库支持（MySQL、PostgreSQL、SQLite、MSSQL、Oracle、TDengine）
+- 数据库连接池（RBatis，自动选择驱动）
 - Redis 缓存服务
 - Keycloak JWT 验证
 - 跨服务 Token 管理（REMOTE_TOKEN）
@@ -21,12 +22,12 @@ genies_context 是 Genies 框架的应用上下文管理库，提供全局上下
 ## Architecture
 
 ```
-应用启动 → CONTEXT (lazy_static) → init_mysql() → 就绪
+应用启动 → CONTEXT (lazy_static) → init_database() → 就绪
                 │
                 ├── ApplicationConfig (./application.yml)
                 ├── Keycloak Keys (异步获取)
                 ├── CacheService (Redis)
-                └── RBatis (MySQL 连接池)
+                └── RBatis (根据 URL scheme 自动选择驱动)
 ```
 
 核心组件：
@@ -34,7 +35,8 @@ genies_context 是 Genies 框架的应用上下文管理库，提供全局上下
 - `CONTEXT` - 全局单例
 - `REMOTE_TOKEN` - 跨服务 Token（Mutex<RemoteToken>）
 - `SERVICE_STATUS` - K8s 探针状态（Mutex<HashMap>）
-- `init_mysql()` - 数据库初始化（Once 保证幂等）
+- `init_database()` - 数据库初始化（自动选择驱动，Once 保证幂等）
+- `init_mysql()` - 已废弃，`init_database` 的别名
 - `salvo_auth` - JWT 认证中间件
 - `checked_token` / `is_white_list_api` - 认证辅助函数
 
@@ -58,8 +60,9 @@ use genies::context::CONTEXT;
 
 #[tokio::main]
 async fn main() {
-    // 初始化 MySQL 连接池（线程安全，幂等）
-    CONTEXT.init_mysql().await;
+    // 初始化数据库连接池（线程安全，幂等）
+    // 根据 database_url 的 scheme 自动选择驱动
+    CONTEXT.init_database().await;
     
     println!("数据库已连接: {:?}", CONTEXT.rbatis.get_pool().unwrap().state().await);
 }
@@ -122,8 +125,10 @@ pub struct ApplicationContext {
 }
 
 impl ApplicationContext {
-    pub async fn init_mysql(&self);  // 初始化数据库（幂等）
-    pub fn new() -> Self;            // 创建上下文
+    pub async fn init_database(&self);  // 初始化数据库（幂等，自动选择驱动）
+    #[deprecated]
+    pub async fn init_mysql(&self);     // 已废弃，使用 init_database
+    pub fn new() -> Self;               // 创建上下文
 }
 ```
 
@@ -178,6 +183,14 @@ pub async fn salvo_auth(req: &mut Request, depot: &mut Depot, res: &mut Response
 
 ```yaml
 server_url: "0.0.0.0:5800"
+
+# 数据库 URL（根据 scheme 自动选择驱动）
+# MySQL:      mysql://user:pass@localhost:3306/db
+# PostgreSQL: postgres://user:pass@localhost:5432/db
+# SQLite:     sqlite://./data.db
+# MSSQL:      mssql://user:pass@localhost:1433/db
+# Oracle:     oracle://user:pass@localhost:1521/ORCL
+# TDengine:   taos://user:pass@localhost:6030/db
 database_url: "mysql://user:pass@localhost:3306/db"
 max_connections: 10
 wait_timeout: 30
@@ -195,6 +208,29 @@ white_list_api:
   - "/health"
   - "/dapr/*"
   - "/swagger-ui/*"
+```
+
+### Feature Flags
+
+| Feature | 驱动 | URL Scheme |
+|---------|------|------------|
+| `mysql`（默认） | rbdc-mysql | `mysql://` |
+| `postgres` | rbdc-pg | `postgres://`, `postgresql://` |
+| `sqlite` | rbdc-sqlite | `sqlite://` |
+| `mssql` | rbdc-mssql | `mssql://`, `sqlserver://` |
+| `oracle` | rbdc-oracle | `oracle://` |
+| `tdengine` | rbdc-tdengine | `taos://`, `taos+ws://` |
+| `all-db` | 所有驱动 | 以上所有 |
+
+**切换数据库：**
+
+```toml
+# 使用 PostgreSQL
+[dependencies]
+genies = { version = "1.5", default-features = false, features = ["postgres"] }
+
+# 或直接使用 genies_context
+genies_context = { version = "1.5", default-features = false, features = ["postgres"] }
 ```
 
 ## Auth Middleware Flow
@@ -231,7 +267,7 @@ use genies::context::SERVICE_STATUS;
 ## Thread Safety
 
 - `CONTEXT`: `lazy_static` 单次初始化，字段线程安全
-- `init_mysql()`: `Once` 保证幂等
+- `init_database()`: `Once` 保证幂等
 - `REMOTE_TOKEN`: `Mutex` 线程安全
 - `SERVICE_STATUS`: `Mutex` 线程安全
 

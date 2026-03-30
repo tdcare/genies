@@ -47,14 +47,41 @@ pub struct ApplicationContext {
     pub cache_service: CacheService,
     pub redis_save_service: CacheService,
     pub keycloak_keys: Keys,
-    mysql_init_once: Once,  // 线程安全的初始化标志
+    db_init_once: Once,  // 线程安全的初始化标志
+}
+
+/// 根据数据库 URL scheme 创建对应的驱动实例
+fn create_db_driver(url: &str) -> Box<dyn rbdc::db::Driver> {
+    let scheme = url.split("://").next().unwrap_or("");
+    match scheme {
+        #[cfg(feature = "mysql")]
+        "mysql" => Box::new(rbdc_mysql::driver::MysqlDriver {}),
+        
+        #[cfg(feature = "postgres")]
+        "postgres" | "postgresql" => Box::new(rbdc_pg::driver::PgDriver {}),
+        
+        #[cfg(feature = "sqlite")]
+        "sqlite" => Box::new(rbdc_sqlite::driver::SqliteDriver {}),
+        
+        #[cfg(feature = "mssql")]
+        "mssql" | "sqlserver" => Box::new(rbdc_mssql::driver::MssqlDriver {}),
+        
+        #[cfg(feature = "oracle")]
+        "oracle" => Box::new(rbdc_oracle::driver::OracleDriver {}),
+        
+        #[cfg(feature = "tdengine")]
+        "taos" | "taos+ws" => Box::new(rbdc_tdengine::driver::TaosDriver {}),
+        
+        _ => panic!("Unsupported database scheme '{}'. Check database_url or enable the corresponding feature flag.", scheme),
+    }
 }
 impl ApplicationContext {
-    /// init database pool
-    pub async fn init_mysql(&self) {
-        self.mysql_init_once.call_once(|| {
-            log::debug!("rbatis mysql init ({})...", self.config.database_url);
-            let _ = self.rbatis.init(rbdc_mysql::driver::MysqlDriver {}, &self.config.database_url).unwrap();
+    /// 初始化数据库连接池，根据 database_url 自动选择驱动
+    pub async fn init_database(&self) {
+        self.db_init_once.call_once(|| {
+            let driver = create_db_driver(&self.config.database_url);
+            log::info!("rbatis database init ({})...", self.config.database_url);
+            let _ = self.rbatis.init(driver, &self.config.database_url).unwrap();
             
             let _ = self.rbatis.get_pool().unwrap().set_max_open_conns(self.config.max_connections as u64);
             let _ = self.rbatis.get_pool().unwrap().set_max_idle_conns(self.config.wait_timeout as u64);
@@ -64,7 +91,13 @@ impl ApplicationContext {
         // 异步获取连接验证放在 call_once 外面（每次都可以验证）
         let _ = self.rbatis.get_pool().unwrap().get().await;
         
-        log::info!("rbatis mysql init success! pool state = {:?}", self.rbatis.get_pool().unwrap().state().await);
+        log::info!("rbatis database init success! pool state = {:?}", self.rbatis.get_pool().unwrap().state().await);
+    }
+
+    /// 初始化数据库连接池（已废弃，请使用 init_database）
+    #[deprecated(note = "Use init_database() instead")]
+    pub async fn init_mysql(&self) {
+        self.init_database().await;
     }
 
         // let manager = ManagerPorxy::from(
@@ -104,7 +137,7 @@ impl ApplicationContext {
             cache_service: CacheService::new(&config),
             redis_save_service: CacheService::new_saved(&config),
             config,
-            mysql_init_once: Once::new(),
+            db_init_once: Once::new(),
         }
     }
 }

@@ -32,7 +32,12 @@ serde_yaml = "0.9"
 rbatis = {version="4.8",features = ["debug_mode"]} #必选
 rbs = { version = "4.7"}
 rbdc = { version = "4.7", default-features = false }
-rbdc-mysql={version="4.7"}
+rbdc-mysql = { version = "4.7" }
+rbdc-pg = { version = "4.7" }
+rbdc-sqlite = { version = "4.7" }
+rbdc-mssql = { version = "4.7" }
+rbdc-oracle = { version = "0.7" }
+rbdc-tdengine = { version = "4.5" }
 
 tracing = "0.1"
 tracing-subscriber ={version= "0.3",features = ["env-filter"]}

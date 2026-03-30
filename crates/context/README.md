@@ -9,7 +9,8 @@ genies_context provides centralized management of application runtime context in
 ## Features
 
 - **Global Context Singleton**: `CONTEXT` provides access to config, database, and cache
-- **Database Connection Pool**: Async MySQL connection pool via RBatis
+- **Multi-Database Support**: Supports MySQL, PostgreSQL, SQLite, MSSQL, Oracle, TDengine via feature flags
+- **Database Connection Pool**: Async connection pool via RBatis with automatic driver selection
 - **Cache Services**: Redis-backed cache with separate data and save channels
 - **Keycloak Integration**: JWT key retrieval and token verification
 - **Cross-Service Token**: `REMOTE_TOKEN` for service-to-service authentication
@@ -26,7 +27,8 @@ genies_context provides centralized management of application runtime context in
 | `CONTEXT` | lib.rs | Global singleton via `lazy_static` |
 | `REMOTE_TOKEN` | lib.rs | Cross-service token storage (`Mutex<RemoteToken>`) |
 | `SERVICE_STATUS` | lib.rs | K8s probe status (`Mutex<HashMap>`) |
-| `init_mysql` | app_context.rs | Async database pool initialization |
+| `init_database` | app_context.rs | Async database pool initialization (auto driver selection) |
+| `init_mysql` | app_context.rs | Deprecated alias for `init_database` |
 | `RemoteToken` | app_context.rs | Service-to-service authentication token |
 | `salvo_auth` | auth.rs | Salvo JWT authentication middleware |
 | `checked_token` | auth.rs | Token verification function |
@@ -35,12 +37,12 @@ genies_context provides centralized management of application runtime context in
 ### Initialization Flow
 
 ```
-Application Start → CONTEXT (lazy_static) → init_mysql() → Ready
+Application Start → CONTEXT (lazy_static) → init_database() → Ready
                          │
                          ├── ApplicationConfig (./application.yml)
                          ├── Keycloak Keys (async fetch)
                          ├── CacheService (Redis)
-                         └── RBatis (MySQL pool)
+                         └── RBatis (auto-selected driver based on URL scheme)
 ```
 
 ## Quick Start
@@ -62,8 +64,9 @@ use genies::context::CONTEXT;
 
 #[tokio::main]
 async fn main() {
-    // Initialize MySQL connection pool (thread-safe, only executes once)
-    CONTEXT.init_mysql().await;
+    // Initialize database connection pool (thread-safe, only executes once)
+    // Driver is automatically selected based on database_url scheme
+    CONTEXT.init_database().await;
     
     // Now ready to use CONTEXT.rbatis
     println!("Database connected: {:?}", CONTEXT.rbatis.get_pool().unwrap().state().await);
@@ -138,7 +141,12 @@ pub struct ApplicationContext {
 }
 
 impl ApplicationContext {
-    /// Initialize MySQL connection pool (thread-safe, idempotent)
+    /// Initialize database connection pool (thread-safe, idempotent)
+    /// Automatically selects driver based on database_url scheme
+    pub async fn init_database(&self);
+    
+    /// Initialize database (deprecated, use init_database instead)
+    #[deprecated(note = "Use init_database() instead")]
     pub async fn init_mysql(&self);
     
     /// Create new ApplicationContext (reads ./application.yml)
@@ -271,13 +279,73 @@ use genies::context::SERVICE_STATUS;
 }
 ```
 
+## Multi-Database Support
+
+### Feature Flags
+
+| Feature | Driver | URL Schemes |
+|---------|--------|-------------|
+| `mysql` (default) | rbdc-mysql | `mysql://` |
+| `postgres` | rbdc-pg | `postgres://`, `postgresql://` |
+| `sqlite` | rbdc-sqlite | `sqlite://` |
+| `mssql` | rbdc-mssql | `mssql://`, `sqlserver://` |
+| `oracle` | rbdc-oracle | `oracle://` |
+| `tdengine` | rbdc-tdengine | `taos://`, `taos+ws://` |
+| `all-db` | All drivers | All above |
+
+### Usage
+
+**Switch database in Cargo.toml:**
+
+```toml
+# Use PostgreSQL instead of default MySQL
+[dependencies]
+genies_context = { version = "1.5", default-features = false, features = ["postgres"] }
+
+# Or via genies facade
+genies = { version = "1.5", default-features = false, features = ["postgres"] }
+```
+
+**Database URL examples in application.yml:**
+
+```yaml
+# MySQL
+database_url: "mysql://user:password@localhost:3306/mydb"
+
+# PostgreSQL
+database_url: "postgres://user:password@localhost:5432/mydb"
+
+# SQLite
+database_url: "sqlite://./data.db"
+
+# MSSQL
+database_url: "mssql://user:password@localhost:1433/mydb"
+
+# Oracle
+database_url: "oracle://user:password@localhost:1521/ORCL"
+
+# TDengine
+database_url: "taos://user:password@localhost:6030/mydb"
+```
+
+### Backward Compatibility
+
+- Default feature is `mysql`, no changes needed for existing MySQL projects
+- `init_mysql()` is still available but deprecated; use `init_database()` instead
+- The driver is automatically selected based on `database_url` scheme at runtime
+
 ## Dependencies
 
 - **genies_config** - Application configuration
 - **genies_cache** - Cache service abstraction
 - **genies_core** - JWT utilities, error types
 - **rbatis** - ORM framework
-- **rbdc-mysql** - MySQL driver
+- **rbdc-mysql** - MySQL driver (with `mysql` feature)
+- **rbdc-pg** - PostgreSQL driver (with `postgres` feature)
+- **rbdc-sqlite** - SQLite driver (with `sqlite` feature)
+- **rbdc-mssql** - MSSQL driver (with `mssql` feature)
+- **rbdc-oracle** - Oracle driver (with `oracle` feature)
+- **rbdc-tdengine** - TDengine driver (with `tdengine` feature)
 - **lazy_static** - Global singleton pattern
 - **tokio** - Async runtime
 - **salvo** - Web framework (for auth middleware)
@@ -292,7 +360,7 @@ use genies::context::SERVICE_STATUS;
 ## Thread Safety
 
 - `CONTEXT`: `lazy_static` ensures single initialization, fields are thread-safe
-- `init_mysql()`: Uses `Once` for idempotent initialization
+- `init_database()`: Uses `Once` for idempotent initialization
 - `REMOTE_TOKEN`: `Mutex<RemoteToken>` for thread-safe access
 - `SERVICE_STATUS`: `Mutex<HashMap>` for thread-safe status updates
 
