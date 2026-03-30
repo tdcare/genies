@@ -3,6 +3,7 @@ extern crate proc_macro;
 mod aggregate_type;
 mod casbin;
 mod config_core_type;
+mod config_shared;
 mod config_type;
 mod enu;
 mod event_type;

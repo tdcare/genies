@@ -3,23 +3,23 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "1.4.0"
+version = "1.5.0"
 edition = "2021"
 authors = ["tdcare"]
 license = "MIT"
 repository = "https://github.com/tdcare/genies"
 
 [workspace.dependencies]
-genies = {version = "1.4.5", path = "crates/genies" }
-genies_core = {version ="1.4.4", path = "crates/core" }
-genies_derive = {version = "1.4.5", path = "crates/genies_derive" }
-genies_config = {version = "1.4.2", path = "crates/config" }
-genies_context = {version = "1.4.3", path = "crates/context" }
-genies_cache = {version ="1.4.2", path = "crates/cache" }
-genies_dapr = {version = "1.4.2", path = "crates/dapr" }
-genies_ddd = {version ="1.4.2", path = "crates/ddd" }
-genies_k8s = { version ="1.4.2", path = "crates/k8s" }
-genies_auth = { version = "1.4.2", path = "crates/auth" }
+genies = {version = "1.5.0", path = "crates/genies" }
+genies_core = {version = "1.5.0", path = "crates/core" }
+genies_derive = {version = "1.5.0", path = "crates/genies_derive" }
+genies_config = {version = "1.5.0", path = "crates/config" }
+genies_context = {version = "1.5.0", path = "crates/context" }
+genies_cache = {version = "1.5.0", path = "crates/cache" }
+genies_dapr = {version = "1.5.0", path = "crates/dapr" }
+genies_ddd = {version = "1.5.0", path = "crates/ddd" }
+genies_k8s = { version = "1.5.0", path = "crates/k8s" }
+genies_auth = { version = "1.5.0", path = "crates/auth" }
 
 
 log = "0.4.17"
@@ -29,7 +29,7 @@ serde_json = "1.0.89"
 serde_yaml = "0.9"
 
 
-rbatis = {version="4.7",features = ["debug_mode"]} #必选
+rbatis = {version="4.8",features = ["debug_mode"]} #必选
 rbs = { version = "4.7"}
 rbdc = { version = "4.7", default-features = false }
 rbdc-mysql={version="4.7"}
@@ -48,5 +48,5 @@ async-trait = "0.1.59"
 inventory = "0.3"
 
 # 数据库迁移框架
-flyway = { git = "https://github.com/tdcare/flyway-rs" }
-flyway-rbatis = { git = "https://github.com/tdcare/flyway-rs" }
+flyway = "0.4.0"
+flyway-rbatis = "0.4.0"
