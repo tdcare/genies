@@ -14,15 +14,13 @@
 
 #[cfg(test)]
 mod tests {
-    use casbin::CoreApi;
     use genies::context::CONTEXT;
     use genies_auth::{auth_admin_router, auth_admin_ui_router, auth_public_router, casbin_auth, extract_and_sync_schemas, EnforcerManager};
     use genies_derive::casbin;
     use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
-    use salvo::oapi::swagger_ui::SwaggerUi;
     use salvo::prelude::*;
     use serde::{Deserialize, Serialize};
-    use serde_json::{json, Value};
+    use serde_json::Value;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::OnceCell;
@@ -59,12 +57,43 @@ mod tests {
         })
     }
 
-    // ==================== 常量定义 ====================
+    // ==================== Token 响应结构体 ====================
 
-    /// 测试用 JWT Token (可根据实际环境调整)
-    /// 在实际测试中，可能需要从 Keycloak 获取真实 token
-    /// 或者配置服务端跳过 JWT 验证
-    const TEST_TOKEN: &str = "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJqcGVlbl94dzR0RjIxOFZfUF9ZVC1WNG5WNmw4XzFXN0JiUjRncHZmZFA4In0.eyJleHAiOjE3NzQ3Njk1MDgsImlhdCI6MTc3NDY2MTUwOCwianRpIjoiN2U0ZmM5YzItNWQzYS00NTEyLTkyOTUtMWVhYTAzYzIxZWQ2IiwiaXNzIjoiaHR0cDovL2dhdGV3YXktc2VydmljZS9hdXRoL3JlYWxtcy90ZGNhcmUiLCJhdWQiOiJhY2NvdW50Iiwic3ViIjoiZWYzZmRmYzYtNWVhNy00NTFjLThiMzctOTk2MGIxN2IxMzk3IiwidHlwIjoiQmVhcmVyIiwiYXpwIjoidGRuaXMiLCJzZXNzaW9uX3N0YXRlIjoiODA5OGYwYmMtNjMxYS00MWJhLWE4YzItODU5OGU4MjgxMDk2IiwiYWNyIjoiMSIsInJlYWxtX2FjY2VzcyI6eyJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsIm51cnNlIiwidW1hX2F1dGhvcml6YXRpb24iLCJ1c2VyIl19LCJyZXNvdXJjZV9hY2Nlc3MiOnsidGRuaXMiOnsicm9sZXMiOlsibnVyc2VNYW5hZ2VyIiwidXNlciJdfSwiYWNjb3VudCI6eyJyb2xlcyI6WyJtYW5hZ2UtYWNjb3VudCIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoiIiwiZGVwYXJ0bWVudE5hbWUiOiLlhajnp5HljLvlrabnp5HmiqTnkIbnq5kiLCJhZGRyZXNzIjp7fSwiZGVwYXJ0bWVudENvZGUiOiIwMjEzSEwiLCJkZXBhcnRtZW50SWQiOiI3Yjg4MWUzNy0xYThlLTQ0NDYtODcwZS1lM2RjMWM3NGMwNDIiLCJyb2xlcyI6WyJvZmZsaW5lX2FjY2VzcyIsIm51cnNlIiwidW1hX2F1dGhvcml6YXRpb24iLCJ1c2VyIl0sImdyb3VwcyI6WyJvZmZsaW5lX2FjY2VzcyIsIm51cnNlIiwidW1hX2F1dGhvcml6YXRpb24iLCJ1c2VyIl0sImRlcHQiOltdLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJhZG1pbiIsImdpdmVuX25hbWUiOiLns7t45ZGYIiwidXNlcklkIjoiYjdiOWNhMmUtNzU0Zi00MzU3LWE4ZTAtN2M3NDI5YTE2OTc5IiwibmFtZSI6Iuezu3jlkZgiLCJpZCI6ImI3YjljYTJlLTc1NGYtNDM1Ny1hOGUwLTdjNzQyOWExNjk3OSIsImRlcGFydG1lbnRBYnN0cmFjdCI6IuWFqOenkeWMu-WtpuenkeaKpOeQhuermSJ9.SghSp3G2F1EJDPy5Qi-nrDVNkPikDjEaUxrwJNwzQXkJd7m3EUnEDTkcaxE7cuK1u6ZWmEO2QofrlOYIEFDiPUL_g8k_BW7HypdllXIBupSu2SukuYvCauG0SvBHODuzrbv3qiFtoAbW0GDYAOMC3k7XoUaMbrqSCptof-bSm7MgID0zR5rqCD3xVnJup8_1vdMDwTVBSlEkIcRoDMZNrdSlPKVbZ3GGAFQoq2jWYRWutBJ6ErWnr07i_Gp3nqNoX08irXubxHo9MKcDIJCyNcYuQYDGBPW0SYmuAIvRqSW9mmrXY7JplcbTx0gNONaq-AH-BaRH7jo_ubuWXeup8A";
+    /// Token 响应结构（用于解析 /auth/token 返回）
+    #[derive(Debug, Deserialize)]
+    struct TokenResponse {
+        access_token: String,
+        #[allow(dead_code)]
+        expires_in: i64,
+        #[allow(dead_code)]
+        token_type: String,
+    }
+
+    // ==================== 动态 Token 获取 ====================
+
+    /// 缓存的测试 Token（只请求一次）
+    static CACHED_TEST_TOKEN: OnceCell<String> = OnceCell::const_new();
+
+    /// 从 /auth/token 获取并缓存测试 Token
+    async fn get_test_token(base_url: &str) -> &'static str {
+        CACHED_TEST_TOKEN.get_or_init(|| async {
+            let resp = get_without_auth(base_url, "/auth/token").await;
+            let status = resp.status();
+
+            if status.is_success() {
+                let body: ApiResponse<TokenResponse> = resp
+                    .json()
+                    .await
+                    .expect("Failed to parse token response");
+                if let Some(token_data) = body.data {
+                    println!("[TOKEN] Got test token from /auth/token (expires_in: {}s)", token_data.expires_in);
+                    return token_data.access_token;
+                }
+            }
+
+            panic!("Failed to get test token from /auth/token: {}", status);
+        }).await.as_str()
+    }
 
     // ==================== 响应结构体 ====================
 
@@ -72,6 +101,7 @@ mod tests {
     #[derive(Debug, Deserialize)]
     struct ApiResponse<T> {
         code: String,
+        #[allow(dead_code)]
         msg: String,
         data: Option<T>,
     }
@@ -100,6 +130,7 @@ mod tests {
     /// 模型记录
     #[derive(Debug, Deserialize)]
     struct ModelRecord {
+        #[allow(dead_code)]
         id: i64,
         model_name: String,
         model_text: String,
@@ -115,7 +146,9 @@ mod tests {
         v1: String,
         v2: String,
         v3: String,
+        #[allow(dead_code)]
         v4: String,
+        #[allow(dead_code)]
         v5: String,
     }
 
@@ -285,7 +318,7 @@ mod tests {
 
                     // 启动服务器
                     let health_url = format!("{}/health", &url);
-                    let server_handle = tokio::spawn(async move {
+                    let _server_handle = tokio::spawn(async move {
                         Server::new(acceptor).serve(router).await;
                     });
 
@@ -318,8 +351,9 @@ mod tests {
     #[tokio::test]
     async fn test_01_schema_sync_has_data() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
-        let resp = get_with_auth(&base_url, "/auth/schemas", TEST_TOKEN).await;
+        let resp = get_with_auth(&base_url, "/auth/schemas", token).await;
         
         // 检查响应状态
         assert!(
@@ -352,8 +386,9 @@ mod tests {
     #[tokio::test]
     async fn test_01_1_schema_descriptions_extracted() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
-        let resp = get_with_auth(&base_url, "/auth/schemas", TEST_TOKEN).await;
+        let resp = get_with_auth(&base_url, "/auth/schemas", token).await;
 
         if resp.status().as_u16() == 403 {
             println!("SKIP: Got 403, cannot verify schema descriptions without permission");
@@ -448,8 +483,9 @@ mod tests {
     #[tokio::test]
     async fn test_02_model_has_default_definition() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
-        let resp = get_with_auth(&base_url, "/auth/model", TEST_TOKEN).await;
+        let resp = get_with_auth(&base_url, "/auth/model", token).await;
 
         if resp.status().is_success() {
             let body: ApiResponse<ModelRecord> = resp.json().await.unwrap();
@@ -488,8 +524,9 @@ mod tests {
     #[tokio::test]
     async fn test_03_policies_loaded_from_db() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
-        let resp = get_with_auth(&base_url, "/auth/policies", TEST_TOKEN).await;
+        let resp = get_with_auth(&base_url, "/auth/policies", token).await;
 
         if resp.status().is_success() {
             let body: ApiResponse<Vec<PolicyRecord>> = resp.json().await.unwrap();
@@ -519,6 +556,7 @@ mod tests {
     #[tokio::test]
     async fn test_04_hot_reload_policy_changes() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
         // 1. 添加一个测试策略
         let test_policy = PolicyDto {
@@ -531,7 +569,7 @@ mod tests {
             v5: String::new(),
         };
 
-        let add_resp = post_json_with_auth(&base_url, "/auth/policies", &test_policy, TEST_TOKEN).await;
+        let add_resp = post_json_with_auth(&base_url, "/auth/policies", &test_policy, token).await;
         println!("Add policy status: {}", add_resp.status());
 
         if add_resp.status().is_success() {
@@ -540,7 +578,7 @@ mod tests {
             println!("Policy added: {:?}", body.data);
 
             // 2. 手动触发 reload
-            let reload_resp = post_with_auth(&base_url, "/auth/reload", TEST_TOKEN).await;
+            let reload_resp = post_with_auth(&base_url, "/auth/reload", token).await;
             println!("Reload status: {}", reload_resp.status());
 
             if reload_resp.status().is_success() {
@@ -549,7 +587,7 @@ mod tests {
             }
 
             // 3. 查询策略确认已添加
-            let list_resp = get_with_auth(&base_url, "/auth/policies", TEST_TOKEN).await;
+            let list_resp = get_with_auth(&base_url, "/auth/policies", token).await;
             if list_resp.status().is_success() {
                 let list_body: ApiResponse<Vec<PolicyRecord>> = list_resp.json().await.unwrap();
                 if let Some(policies) = list_body.data {
@@ -561,7 +599,7 @@ mod tests {
                         let del_resp = delete_with_auth(
                             &base_url,
                             &format!("/auth/policies/{}", policy.id),
-                            TEST_TOKEN,
+                            token,
                         )
                         .await;
                         println!("Delete policy status: {}", del_resp.status());
@@ -577,9 +615,10 @@ mod tests {
     #[tokio::test]
     async fn test_05_role_assignment() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
         // 1. 列出现有角色
-        let list_resp = get_with_auth(&base_url, "/auth/roles", TEST_TOKEN).await;
+        let list_resp = get_with_auth(&base_url, "/auth/roles", token).await;
         println!("List roles status: {}", list_resp.status());
 
         if list_resp.status().is_success() {
@@ -600,12 +639,12 @@ mod tests {
             v5: String::new(),
         };
 
-        let add_resp = post_json_with_auth(&base_url, "/auth/roles", &role_dto, TEST_TOKEN).await;
+        let add_resp = post_json_with_auth(&base_url, "/auth/roles", &role_dto, token).await;
         println!("Add role status: {}", add_resp.status());
 
         if add_resp.status().is_success() {
             // 3. 查询并删除
-            let list_resp2 = get_with_auth(&base_url, "/auth/roles", TEST_TOKEN).await;
+            let list_resp2 = get_with_auth(&base_url, "/auth/roles", token).await;
             if list_resp2.status().is_success() {
                 let body: ApiResponse<Vec<PolicyRecord>> = list_resp2.json().await.unwrap();
                 if let Some(roles) = body.data {
@@ -613,7 +652,7 @@ mod tests {
                         let del_resp = delete_with_auth(
                             &base_url,
                             &format!("/auth/roles/{}", role.id),
-                            TEST_TOKEN,
+                            token,
                         )
                         .await;
                         println!("Delete role status: {}", del_resp.status());
@@ -629,9 +668,10 @@ mod tests {
     #[tokio::test]
     async fn test_06_object_grouping() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
         // 1. 列出现有分组
-        let list_resp = get_with_auth(&base_url, "/auth/groups", TEST_TOKEN).await;
+        let list_resp = get_with_auth(&base_url, "/auth/groups", token).await;
         println!("List groups status: {}", list_resp.status());
 
         if list_resp.status().is_success() {
@@ -655,12 +695,12 @@ mod tests {
             v5: String::new(),
         };
 
-        let add_resp = post_json_with_auth(&base_url, "/auth/groups", &group_dto, TEST_TOKEN).await;
+        let add_resp = post_json_with_auth(&base_url, "/auth/groups", &group_dto, token).await;
         println!("Add group status: {}", add_resp.status());
 
         if add_resp.status().is_success() {
             // 3. 验证并清理
-            let list_resp2 = get_with_auth(&base_url, "/auth/groups", TEST_TOKEN).await;
+            let list_resp2 = get_with_auth(&base_url, "/auth/groups", token).await;
             if list_resp2.status().is_success() {
                 let body: ApiResponse<Vec<PolicyRecord>> = list_resp2.json().await.unwrap();
                 if let Some(groups) = body.data {
@@ -668,7 +708,7 @@ mod tests {
                         let del_resp = delete_with_auth(
                             &base_url,
                             &format!("/auth/groups/{}", group.id),
-                            TEST_TOKEN,
+                            token,
                         )
                         .await;
                         println!("Delete group status: {}", del_resp.status());
@@ -686,6 +726,7 @@ mod tests {
     #[tokio::test]
     async fn test_07_api_access_denied_returns_403() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
         // 1. 首先添加一个 deny 策略
         let deny_policy = PolicyDto {
@@ -698,12 +739,12 @@ mod tests {
             v5: String::new(),
         };
 
-        let add_resp = post_json_with_auth(&base_url, "/auth/policies", &deny_policy, TEST_TOKEN).await;
+        let add_resp = post_json_with_auth(&base_url, "/auth/policies", &deny_policy, token).await;
         let mut added_policy_id: Option<i64> = None;
 
         if add_resp.status().is_success() {
             // 查找添加的策略 ID 以便后续清理
-            let list_resp = get_with_auth(&base_url, "/auth/policies", TEST_TOKEN).await;
+            let list_resp = get_with_auth(&base_url, "/auth/policies", token).await;
             if list_resp.status().is_success() {
                 let body: ApiResponse<Vec<PolicyRecord>> = list_resp.json().await.unwrap();
                 if let Some(policies) = body.data {
@@ -716,7 +757,7 @@ mod tests {
             }
 
             // 2. 触发 reload
-            let _ = post_with_auth(&base_url, "/auth/reload", TEST_TOKEN).await;
+            let _ = post_with_auth(&base_url, "/auth/reload", token).await;
 
             // 3. 以 guest 身份（无 token）访问
             let user_resp = get_without_auth(&base_url, "/api/users").await;
@@ -736,9 +777,9 @@ mod tests {
 
         // 4. 清理测试策略
         if let Some(id) = added_policy_id {
-            let del_resp = delete_with_auth(&base_url, &format!("/auth/policies/{}", id), TEST_TOKEN).await;
+            let del_resp = delete_with_auth(&base_url, &format!("/auth/policies/{}", id), token).await;
             println!("Cleanup policy status: {}", del_resp.status());
-            let _ = post_with_auth(&base_url, "/auth/reload", TEST_TOKEN).await;
+            let _ = post_with_auth(&base_url, "/auth/reload", token).await;
         }
     }
 
@@ -750,6 +791,7 @@ mod tests {
     #[tokio::test]
     async fn test_08_field_level_filtering() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
         // 需要配置字段级权限规则才能看到过滤效果
         // 例如: p, guest, User, email, deny
@@ -773,7 +815,7 @@ mod tests {
         }
 
         // 2. 以 admin 身份访问（如果有有效 token）
-        let resp_admin = get_with_auth(&base_url, "/api/users", TEST_TOKEN).await;
+        let resp_admin = get_with_auth(&base_url, "/api/users", token).await;
         println!("Admin access /api/users: {}", resp_admin.status());
 
         if resp_admin.status().is_success() {
@@ -814,8 +856,9 @@ mod tests {
     #[tokio::test]
     async fn test_10_reload_enforcer() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
-        let resp = post_with_auth(&base_url, "/auth/reload", TEST_TOKEN).await;
+        let resp = post_with_auth(&base_url, "/auth/reload", token).await;
         println!("Reload enforcer status: {}", resp.status());
 
         if resp.status().is_success() {
@@ -833,9 +876,10 @@ mod tests {
     #[tokio::test]
     async fn test_11_update_model() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
         // 1. 先获取当前模型
-        let get_resp = get_with_auth(&base_url, "/auth/model", TEST_TOKEN).await;
+        let get_resp = get_with_auth(&base_url, "/auth/model", token).await;
         
         if !get_resp.status().is_success() {
             println!("SKIP: Cannot get current model, status: {}", get_resp.status());
@@ -860,7 +904,7 @@ mod tests {
             description: Some("Updated by integration test".to_string()),
         };
 
-        let put_resp = put_json_with_auth(&base_url, "/auth/model", &update_dto, TEST_TOKEN).await;
+        let put_resp = put_json_with_auth(&base_url, "/auth/model", &update_dto, token).await;
         println!("Update model status: {}", put_resp.status());
 
         if put_resp.status().is_success() {
@@ -874,7 +918,7 @@ mod tests {
                 description: original_model.description,
             };
 
-            let restore_resp = put_json_with_auth(&base_url, "/auth/model", &restore_dto, TEST_TOKEN).await;
+            let restore_resp = put_json_with_auth(&base_url, "/auth/model", &restore_dto, token).await;
             println!("Restore model status: {}", restore_resp.status());
         }
     }
@@ -885,12 +929,14 @@ mod tests {
     #[tokio::test]
     async fn test_12_concurrent_requests_no_deadlock() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
         let mut handles = vec![];
 
         // 并发发起 10 个请求
         for i in 0..10 {
             let base_url = base_url.clone();
+            let token = token.to_string();
             let handle = tokio::spawn(async move {
                 let client = http_client();
                 
@@ -900,7 +946,7 @@ mod tests {
                         // GET /auth/policies
                         client
                             .get(format!("{}/auth/policies", base_url))
-                            .headers(auth_headers(TEST_TOKEN))
+                            .headers(auth_headers(&token))
                             .send()
                             .await
                     }
@@ -908,7 +954,7 @@ mod tests {
                         // GET /auth/schemas
                         client
                             .get(format!("{}/auth/schemas", base_url))
-                            .headers(auth_headers(TEST_TOKEN))
+                            .headers(auth_headers(&token))
                             .send()
                             .await
                     }
@@ -916,7 +962,7 @@ mod tests {
                         // GET /auth/model
                         client
                             .get(format!("{}/auth/model", base_url))
-                            .headers(auth_headers(TEST_TOKEN))
+                            .headers(auth_headers(&token))
                             .send()
                             .await
                     }
@@ -962,6 +1008,7 @@ mod tests {
     #[tokio::test]
     async fn test_13_full_crud_workflow() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
 
         let unique_id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -981,7 +1028,7 @@ mod tests {
             v5: String::new(),
         };
 
-        let create_resp = post_json_with_auth(&base_url, "/auth/policies", &policy, TEST_TOKEN).await;
+        let create_resp = post_json_with_auth(&base_url, "/auth/policies", &policy, token).await;
         if !create_resp.status().is_success() {
             println!("SKIP: Cannot create policy, status: {}", create_resp.status());
             return;
@@ -990,7 +1037,7 @@ mod tests {
         println!("CREATE: Policy added for {}", test_user);
 
         // 2. Read: 查询策略
-        let read_resp = get_with_auth(&base_url, "/auth/policies", TEST_TOKEN).await;
+        let read_resp = get_with_auth(&base_url, "/auth/policies", token).await;
         let mut policy_id: Option<i64> = None;
 
         if read_resp.status().is_success() {
@@ -1004,17 +1051,17 @@ mod tests {
         }
 
         // 3. Update: 无直接更新 API，使用 reload 验证
-        let reload_resp = post_with_auth(&base_url, "/auth/reload", TEST_TOKEN).await;
+        let reload_resp = post_with_auth(&base_url, "/auth/reload", token).await;
         println!("RELOAD: status={}", reload_resp.status());
 
         // 4. Delete: 删除策略
         if let Some(id) = policy_id {
-            let delete_resp = delete_with_auth(&base_url, &format!("/auth/policies/{}", id), TEST_TOKEN).await;
+            let delete_resp = delete_with_auth(&base_url, &format!("/auth/policies/{}", id), token).await;
             println!("DELETE: status={}", delete_resp.status());
 
             if delete_resp.status().is_success() {
                 // 验证删除成功
-                let verify_resp = get_with_auth(&base_url, "/auth/policies", TEST_TOKEN).await;
+                let verify_resp = get_with_auth(&base_url, "/auth/policies", token).await;
                 if verify_resp.status().is_success() {
                     let body: ApiResponse<Vec<PolicyRecord>> = verify_resp.json().await.unwrap();
                     if let Some(policies) = body.data {
@@ -1032,7 +1079,7 @@ mod tests {
     // ==================== 字段级权限过滤辅助函数 ====================
 
     /// 添加字段级 deny 策略
-    async fn add_field_deny_policy(base_url: &str, subject: &str, type_name: &str, field_name: &str) -> Option<i64> {
+    async fn add_field_deny_policy(base_url: &str, token: &str, subject: &str, type_name: &str, field_name: &str) -> Option<i64> {
         let resource = format!("{}.{}", type_name, field_name);
         let policy = PolicyDto {
             ptype: "p".to_string(),
@@ -1044,14 +1091,14 @@ mod tests {
             v5: String::new(),
         };
 
-        let resp = post_json_with_auth(base_url, "/auth/policies", &policy, TEST_TOKEN).await;
+        let resp = post_json_with_auth(base_url, "/auth/policies", &policy, token).await;
         if !resp.status().is_success() {
             println!("Failed to add deny policy for {}: {}", resource, resp.status());
             return None;
         }
 
         // 查找添加的策略 ID
-        let list_resp = get_with_auth(base_url, "/auth/policies", TEST_TOKEN).await;
+        let list_resp = get_with_auth(base_url, "/auth/policies", token).await;
         if list_resp.status().is_success() {
             let body: ApiResponse<Vec<PolicyRecord>> = list_resp.json().await.unwrap();
             if let Some(policies) = body.data {
@@ -1067,8 +1114,8 @@ mod tests {
     }
 
     /// 重载 enforcer
-    async fn reload_enforcer(base_url: &str) {
-        let resp = post_with_auth(base_url, "/auth/reload", TEST_TOKEN).await;
+    async fn reload_enforcer(base_url: &str, token: &str) {
+        let resp = post_with_auth(base_url, "/auth/reload", token).await;
         if resp.status().is_success() {
             println!("Enforcer reloaded successfully");
         } else {
@@ -1077,8 +1124,8 @@ mod tests {
     }
 
     /// 删除策略
-    async fn cleanup_policy(base_url: &str, policy_id: i64) {
-        let resp = delete_with_auth(base_url, &format!("/auth/policies/{}", policy_id), TEST_TOKEN).await;
+    async fn cleanup_policy(base_url: &str, token: &str, policy_id: i64) {
+        let resp = delete_with_auth(base_url, &format!("/auth/policies/{}", policy_id), token).await;
         if resp.status().is_success() {
             println!("Cleaned up policy id={}", policy_id);
         } else {
@@ -1087,11 +1134,11 @@ mod tests {
     }
 
     /// 批量清理策略
-    async fn cleanup_policies(base_url: &str, policy_ids: &[i64]) {
+    async fn cleanup_policies(base_url: &str, token: &str, policy_ids: &[i64]) {
         for id in policy_ids {
-            cleanup_policy(base_url, *id).await;
+            cleanup_policy(base_url, token, *id).await;
         }
-        reload_enforcer(base_url).await;
+        reload_enforcer(base_url, token).await;
     }
 
     // ==================== 字段级权限过滤测试 ====================
@@ -1102,15 +1149,16 @@ mod tests {
     #[tokio::test]
     async fn test_14_field_filtering_sensitive_primitive_fields() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
         println!("\n=== Test 14: 敏感原始字段过滤 ===");
 
         let mut policy_ids: Vec<i64> = Vec::new();
 
         // 1. 添加 deny 策略
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "id_card_number").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Employee", "id_card_number").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "base_salary").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Employee", "base_salary").await {
             policy_ids.push(id);
         }
 
@@ -1119,7 +1167,7 @@ mod tests {
             return;
         }
 
-        reload_enforcer(&base_url).await;
+        reload_enforcer(&base_url, token).await;
 
         // 2. 无 Token 请求（guest 用户）
         let guest_resp = get_without_auth(&base_url, "/api/users").await;
@@ -1142,7 +1190,7 @@ mod tests {
         }
 
         // 3. 有 Token 请求（admin 用户）
-        let admin_resp = get_with_auth(&base_url, "/api/users", TEST_TOKEN).await;
+        let admin_resp = get_with_auth(&base_url, "/api/users", token).await;
         println!("Admin access /api/users: {}", admin_resp.status());
 
         if admin_resp.status().is_success() {
@@ -1160,7 +1208,7 @@ mod tests {
         }
 
         // 4. 清理策略
-        cleanup_policies(&base_url, &policy_ids).await;
+        cleanup_policies(&base_url, token, &policy_ids).await;
         println!("=== Test 14 完成 ===\n");
     }
 
@@ -1170,15 +1218,16 @@ mod tests {
     #[tokio::test]
     async fn test_15_field_filtering_nested_address() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
         println!("\n=== Test 15: 嵌套 Address 字段过滤 ===");
 
         let mut policy_ids: Vec<i64> = Vec::new();
 
         // 1. 添加 deny 策略
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Address", "street").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Address", "street").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Address", "postal_code").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Address", "postal_code").await {
             policy_ids.push(id);
         }
 
@@ -1187,7 +1236,7 @@ mod tests {
             return;
         }
 
-        reload_enforcer(&base_url).await;
+        reload_enforcer(&base_url, token).await;
 
         // 2. 无 Token 请求
         let resp = get_without_auth(&base_url, "/api/users").await;
@@ -1222,7 +1271,7 @@ mod tests {
         }
 
         // 3. 清理策略
-        cleanup_policies(&base_url, &policy_ids).await;
+        cleanup_policies(&base_url, token, &policy_ids).await;
         println!("=== Test 15 完成 ===\n");
     }
 
@@ -1232,15 +1281,16 @@ mod tests {
     #[tokio::test]
     async fn test_16_field_filtering_nested_contact_info() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
         println!("\n=== Test 16: 嵌套 ContactInfo 字段过滤 ===");
 
         let mut policy_ids: Vec<i64> = Vec::new();
 
         // 1. 添加 deny 策略
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "ContactInfo", "mobile").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "ContactInfo", "mobile").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "ContactInfo", "emergency_contact_phone").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "ContactInfo", "emergency_contact_phone").await {
             policy_ids.push(id);
         }
 
@@ -1249,7 +1299,7 @@ mod tests {
             return;
         }
 
-        reload_enforcer(&base_url).await;
+        reload_enforcer(&base_url, token).await;
 
         // 2. 无 Token 请求
         let resp = get_without_auth(&base_url, "/api/users").await;
@@ -1274,7 +1324,7 @@ mod tests {
         }
 
         // 3. 清理策略
-        cleanup_policies(&base_url, &policy_ids).await;
+        cleanup_policies(&base_url, token, &policy_ids).await;
         println!("=== Test 16 完成 ===\n");
     }
 
@@ -1284,12 +1334,13 @@ mod tests {
     #[tokio::test]
     async fn test_17_field_filtering_vec_bank_accounts() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
         println!("\n=== Test 17: Vec<BankAccount> 字段过滤 ===");
 
         let mut policy_ids: Vec<i64> = Vec::new();
 
         // 1. 添加 deny 策略
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "BankAccount", "account_number").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "BankAccount", "account_number").await {
             policy_ids.push(id);
         }
 
@@ -1298,7 +1349,7 @@ mod tests {
             return;
         }
 
-        reload_enforcer(&base_url).await;
+        reload_enforcer(&base_url, token).await;
 
         // 2. 无 Token 请求
         let resp = get_without_auth(&base_url, "/api/users").await;
@@ -1327,7 +1378,7 @@ mod tests {
         }
 
         // 3. 清理策略
-        cleanup_policies(&base_url, &policy_ids).await;
+        cleanup_policies(&base_url, token, &policy_ids).await;
         println!("=== Test 17 完成 ===\n");
     }
 
@@ -1337,12 +1388,13 @@ mod tests {
     #[tokio::test]
     async fn test_18_field_filtering_vec_work_experiences() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
         println!("\n=== Test 18: Vec<WorkExperience> 字段过滤 ===");
 
         let mut policy_ids: Vec<i64> = Vec::new();
 
         // 1. 添加 deny 策略
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "WorkExperience", "monthly_salary").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "WorkExperience", "monthly_salary").await {
             policy_ids.push(id);
         }
 
@@ -1351,7 +1403,7 @@ mod tests {
             return;
         }
 
-        reload_enforcer(&base_url).await;
+        reload_enforcer(&base_url, token).await;
 
         // 2. 无 Token 请求
         let resp = get_without_auth(&base_url, "/api/users").await;
@@ -1379,7 +1431,7 @@ mod tests {
         }
 
         // 3. 清理策略
-        cleanup_policies(&base_url, &policy_ids).await;
+        cleanup_policies(&base_url, token, &policy_ids).await;
         println!("=== Test 18 完成 ===\n");
     }
 
@@ -1389,21 +1441,22 @@ mod tests {
     #[tokio::test]
     async fn test_19_field_filtering_mixed_nested_scenario() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
         println!("\n=== Test 19: 综合嵌套场景字段过滤 ===");
 
         let mut policy_ids: Vec<i64> = Vec::new();
 
         // 1. 添加多个类型的 deny 策略
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "id_card_number").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Employee", "id_card_number").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Address", "street").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Address", "street").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "BankAccount", "account_number").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "BankAccount", "account_number").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "ContactInfo", "emergency_contact_phone").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "ContactInfo", "emergency_contact_phone").await {
             policy_ids.push(id);
         }
 
@@ -1411,7 +1464,7 @@ mod tests {
             println!("WARNING: Only {} of 4 policies added", policy_ids.len());
         }
 
-        reload_enforcer(&base_url).await;
+        reload_enforcer(&base_url, token).await;
 
         // 2. 无 Token 请求
         let resp = get_without_auth(&base_url, "/api/users").await;
@@ -1449,7 +1502,7 @@ mod tests {
         }
 
         // 3. 清理策略
-        cleanup_policies(&base_url, &policy_ids).await;
+        cleanup_policies(&base_url, token, &policy_ids).await;
         println!("=== Test 19 完成 ===\n");
     }
 
@@ -1459,28 +1512,29 @@ mod tests {
     #[tokio::test]
     async fn test_20_field_filtering_admin_sees_all() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
         println!("\n=== Test 20: Admin 用户能看到所有字段 ===");
 
         let mut policy_ids: Vec<i64> = Vec::new();
 
         // 1. 添加多个 deny 策略（针对 guest）
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "id_card_number").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Employee", "id_card_number").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Employee", "base_salary").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Employee", "base_salary").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "Address", "street").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "Address", "street").await {
             policy_ids.push(id);
         }
-        if let Some(id) = add_field_deny_policy(&base_url, "guest", "BankAccount", "account_number").await {
+        if let Some(id) = add_field_deny_policy(&base_url, token, "guest", "BankAccount", "account_number").await {
             policy_ids.push(id);
         }
 
-        reload_enforcer(&base_url).await;
+        reload_enforcer(&base_url, token).await;
 
-        // 2. 使用 TEST_TOKEN（admin 用户）请求
-        let admin_resp = get_with_auth(&base_url, "/api/users", TEST_TOKEN).await;
+        // 2. 使用 token（admin 用户）请求
+        let admin_resp = get_with_auth(&base_url, "/api/users", token).await;
         println!("Admin access /api/users: {}", admin_resp.status());
 
         if admin_resp.status().is_success() {
@@ -1513,7 +1567,7 @@ mod tests {
         }
 
         // 3. 清理策略
-        cleanup_policies(&base_url, &policy_ids).await;
+        cleanup_policies(&base_url, token, &policy_ids).await;
         println!("=== Test 20 完成 ===\n");
     }
 
@@ -1523,6 +1577,7 @@ mod tests {
     #[tokio::test]
     async fn test_21_field_filtering_cleanup_restores_full_response() {
         let base_url = get_auth_server_url().await;
+        let token = get_test_token(&base_url).await;
         println!("\n=== Test 21: 策略清理后字段恢复 ===");
 
         // 1. 先获取原始响应（无 deny 规则）
@@ -1537,7 +1592,7 @@ mod tests {
         println!("Before deny rule - id_card_number visible: {}", original_has_id_card);
 
         // 2. 添加 deny 规则
-        let policy_id = match add_field_deny_policy(&base_url, "guest", "Employee", "id_card_number").await {
+        let policy_id = match add_field_deny_policy(&base_url, token, "guest", "Employee", "id_card_number").await {
             Some(id) => id,
             None => {
                 println!("SKIP: Failed to add deny policy");
@@ -1545,7 +1600,7 @@ mod tests {
             }
         };
 
-        reload_enforcer(&base_url).await;
+        reload_enforcer(&base_url, token).await;
 
         // 3. 验证字段被过滤
         let filtered_resp = get_without_auth(&base_url, "/api/users").await;
@@ -1558,8 +1613,8 @@ mod tests {
         println!("With deny rule - id_card_number visible: {}", filtered_has_id_card);
 
         // 4. 删除 deny 规则并 reload
-        cleanup_policy(&base_url, policy_id).await;
-        reload_enforcer(&base_url).await;
+        cleanup_policy(&base_url, token, policy_id).await;
+        reload_enforcer(&base_url, token).await;
 
         // 5. 验证字段恢复可见
         let restored_resp = get_without_auth(&base_url, "/api/users").await;

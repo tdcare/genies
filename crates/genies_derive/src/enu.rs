@@ -68,6 +68,7 @@ impl ArgType {
 }
 
 
+#[allow(dead_code)]
 pub struct FnArg {
     pub arg_type: ArgType,
     pub name: String,

@@ -1,13 +1,11 @@
-use std::sync::Arc;
 #[allow(unused_variables)] //允许未使用的变量
 #[allow(dead_code)] //允许未使用的代码
 #[allow(unused_must_use)]
 #[allow(non_snake_case)]
 use std::thread;
-use genies::k8s::{k8s_health_check};
+use genies::k8s::k8s_health_check;
 
 use salvo::prelude::*;
-use genies::context::auth::salvo_auth;
 use genies::context::CONTEXT;
 use topic::{event_consumer_config};
 

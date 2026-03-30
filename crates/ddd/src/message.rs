@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use rbatis::crud;
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[allow(non_snake_case)]
 pub struct Headers {
     pub ID: Option<String>,
     pub PARTITION_ID: Option<String>,

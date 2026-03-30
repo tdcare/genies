@@ -5,7 +5,7 @@
  * @LastEditTime: 2021-11-29 22:23:13
  */
 
- #![warn(non_snake_case)]
+ #![allow(non_snake_case)]
 
 
  pub mod aggregate;

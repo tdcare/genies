@@ -18,12 +18,12 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
     let func_name_ident = target_fn.sig.ident.to_token_stream();
     let func_name = func_name_ident.to_string();
 
-    let mut aggregate_ident = "".to_token_stream();
-    let mut aggregate_name = String::new();
+    let mut _aggregate_ident = "".to_token_stream();
+    let mut _aggregate_name = String::new();
     let mut aggregate_ty_ident = "".to_token_stream();
-    let mut aggregate_ty_name = String::new();
+    let mut _aggregate_ty_name = String::new();
     let mut event_ident = "".to_token_stream();
-    let mut event_name = String::new();
+    let mut _event_name = String::new();
     let mut event_ty_ident = "".to_token_stream();
     let mut event_ty_name = String::new();
 
@@ -32,14 +32,14 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
             FnArg::Receiver(_) => {}
             FnArg::Typed(t) => {
                 if is_aggregate_ref(t) {
-                    aggregate_ident = t.pat.to_token_stream();
-                    aggregate_name = aggregate_ident.to_string();
+                    _aggregate_ident = t.pat.to_token_stream();
+                    _aggregate_name = _aggregate_ident.to_string();
                     aggregate_ty_ident = t.ty.to_token_stream();
-                    aggregate_ty_name = aggregate_ty_ident.to_string();
+                    _aggregate_ty_name = aggregate_ty_ident.to_string();
                 }
                 if is_domain_event_ref(t) {
                     event_ident = t.pat.to_token_stream();
-                    event_name = event_ident.to_string();
+                    _event_name = event_ident.to_string();
                     event_ty_ident = t.ty.to_token_stream();
                     event_ty_name = event_ty_ident.to_string();
                 }
@@ -85,30 +85,26 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
         }
     }
 
-    let mut topic_ident = "".to_token_stream();
-    if topic_name.is_empty() {
-        topic_ident = quote! {
+    let topic_ident = if topic_name.is_empty() {
+        quote! {
             #aggregate_ty_ident::atype().to_string()
        }
     } else {
-        topic_ident = quote! {
+        quote! {
            #topic_name.to_string()
        }
-    }
+    };
 
     if pubsub_name.is_empty() {
         pubsub_name = "messagebus".to_string();
     }
 
-    let mut metadata_ident = quote! {None};
-    let mut metadata_hash_map = quote! {
-            let mut metadata: HashMap<String, String> = HashMap::new();
-    };
-
-    if metadata.is_empty() {
-        metadata_ident = quote! {None};
-        metadata_hash_map = quote! {};
+    let (metadata_ident, metadata_hash_map) = if metadata.is_empty() {
+        (quote! {None}, quote! {})
     } else {
+        let mut metadata_hash_map = quote! {
+            let mut metadata: HashMap<String, String> = HashMap::new();
+        };
         for item in metadata.split(',') {
             let item = item.trim();
             if item.is_empty() {
@@ -130,12 +126,12 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
                 metadata.insert(#k.to_string(), #v.to_string());
             };
         }
-        metadata_ident = quote! {Some(metadata)};
-    }
+        (quote! {Some(metadata)}, metadata_hash_map)
+    };
 
     #[cfg(feature = "debug_mode")]
         if cfg!(debug_assertions){
-            println!("{}{}{}{}{}{}{}{}{}{}", topic_ident, metadata_ident, aggregate_ident, aggregate_name, aggregate_ty_ident, aggregate_ty_name, event_ident, event_name, event_ty_ident, event_ty_name);
+            println!("{}{}{}{}{}{}{}{}{}{}", topic_ident, metadata_ident, _aggregate_ident, _aggregate_name, aggregate_ty_ident, _aggregate_ty_name, event_ident, _event_name, event_ty_ident, event_ty_name);
         }
 
     let func_args_stream = target_fn.sig.inputs.to_token_stream();

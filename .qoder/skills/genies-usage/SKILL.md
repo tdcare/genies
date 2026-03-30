@@ -7,7 +7,22 @@ description: Guide for using the Genies Rust microservice framework with DDD and
 
 ## 1. 框架简介
 
-**Genies** 是一个基于 Rust 的 DDD + Dapr 微服务开发框架（v1.4.x），通过宏驱动架构提供声明式的聚合根、领域事件、权限控制和配置管理能力。
+**Genies** 是一个基于 Rust 的 DDD + Dapr 微服务开发框架（v1.4.5），通过宏驱动架构提供声明式的聚合根、领域事件、权限控制和配置管理能力。
+
+### 核心模块
+
+| Crate | 版本 | 说明 |
+|-------|------|------|
+| `genies` | 1.4.5 | 主入口，重导出所有子 crate |
+| `genies_derive` | 1.4.5 | 过程宏库：Aggregate、DomainEvent、Config、topic、casbin 等 |
+| `genies_core` | 1.4.4 | 核心基础：错误处理、JWT、HTTP 响应模型 |
+| `genies_config` | 1.4.2 | 配置管理：ApplicationConfig、日志配置 |
+| `genies_context` | 1.4.3 | 全局上下文：CONTEXT、REMOTE_TOKEN、SERVICE_STATUS |
+| `genies_cache` | 1.4.2 | 缓存抽象：Redis/内存双后端 |
+| `genies_dapr` | 1.4.2 | Dapr 集成：CloudEvent、PubSub、Topic 自动收集 |
+| `genies_ddd` | 1.4.2 | DDD 核心：聚合根、领域事件、消息发布 |
+| `genies_k8s` | 1.4.2 | Kubernetes 探针：存活/就绪检查 |
+| `genies_auth` | 1.4.2 | Casbin 权限：API 访问控制、字段级过滤、Admin UI |
 
 ## 2. 快速引用
 
@@ -15,9 +30,10 @@ description: Guide for using the Genies Rust microservice framework with DDD and
 [dependencies]
 genies = "1.4"
 genies_derive = "1.4"
+genies_auth = "1.4"  # 可选：Casbin 权限管理
 rbatis = { version = "4.5", features = ["debug_mode"] }
 tokio = { version = "1.22", features = ["full"] }
-salvo = { version = "0.79", features = ["rustls", "oapi", "affix-state"] }
+salvo = { version = "0.89", features = ["rustls", "oapi", "affix-state"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 ```
@@ -31,7 +47,7 @@ serde_json = "1.0"
 | `#[topic(...)]` | 订阅 Dapr 事件 | `#[topic(name="...", pubsub="messagebus")]` |
 | `#[derive(Config)]` | 定义配置结构 | `#[derive(Config)] struct MyConfig {...}` |
 | `#[derive(ConfigCore)]` | 框架内部配置（避免循环依赖） | 同 Config |
-| `#[casbin]` | 字段级权限控制 | `#[casbin] struct UserProfile {...}` |
+| `#[casbin]` | 字段级权限控制（Writer 层过滤） | `#[casbin] #[derive(Serialize)] struct User {...}` |
 | `#[wrapper]` | HTTP 调用包装（自动刷新 Token） | `#[wrapper] #[get("...")] async fn ...` |
 
 ## 4. 聚合根定义
@@ -217,76 +233,88 @@ let config = MyAppConfig::from_sources("./application.yml").unwrap();
 - `merge(other)` - 合并配置
 - `load_env()` - 加载环境变量
 
-## 9. 字段级权限
+## 9. 字段级权限（方案 C：Writer 层过滤）
 
-使用 `#[casbin]` 宏实现 Casbin 字段级访问控制：
+使用 `#[casbin]` 宏实现 Casbin 字段级访问控制。该宏采用 **Writer 层 JSON 树过滤** 方案：
+
+### 9.1 基本用法
 
 ```rust
 use genies_derive::casbin;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use salvo::oapi::ToSchema;
 
 #[casbin]  // 必须放在最前面
-#[derive(Deserialize, ToSchema)]
-pub struct UserProfile {
+#[derive(Serialize, Deserialize, ToSchema)]
+pub struct Employee {
     pub id: u64,
     pub name: String,
-    pub email: String,
-    pub phone: String,
-    pub credit_card: String,
+    pub id_card_number: String,   // 敏感字段
+    pub base_salary: f64,         // 敏感字段
+    pub home_address: Address,    // 嵌套对象（自动检测）
+    pub bank_accounts: Vec<BankAccount>,  // 嵌套数组（自动检测）
 }
 
-// 在 Handler 中使用
+// 在 Handler 中使用 — 直接返回结构体，Writer 自动过滤
 #[endpoint]
-async fn get_profile(depot: &mut Depot) -> Json<UserProfile> {
-    let enforcer = depot.obtain::<Arc<Enforcer>>().unwrap();
-    let current_user = "alice".to_string();
-    
-    let profile = UserProfile {
+async fn get_employee() -> Employee {
+    Employee {
         id: 1,
-        name: "张三".to_string(),
-        email: "test@example.com".to_string(),
-        phone: "13800138000".to_string(),
-        credit_card: "1234-5678-9012-3456".to_string(),
-        enforcer: None,
-        subject: None,
-    };
-    
-    Json(profile.with_policy(Arc::clone(&enforcer), current_user))
+        name: "张三".into(),
+        id_card_number: "310101199501011234".into(),
+        base_salary: 25000.0,
+        home_address: Address { city: "上海".into(), street: "张江路".into() },
+        bank_accounts: vec![BankAccount { account_number: "622202xxx".into() }],
+    }
 }
 ```
 
-**宏自动生成：**
-- `enforcer` 和 `subject` 字段（`#[serde(skip)]`）
-- `with_policy(enforcer, subject)` 方法
-- `check_permission(field)` 方法
-- 自定义 `Serialize` 实现
+### 9.2 宏生成内容
 
-**model.conf 配置：**
-```ini
-[request_definition]
-r = sub, obj, act
+`#[casbin]` 宏自动生成：
 
-[policy_definition]
-p = sub, obj, act, eft
+1. **`casbin_filter()` 方法** — 对 JSON Value 树进行递归权限过滤
+2. **`Writer` trait 实现** — 在 HTTP 响应序列化时自动应用权限过滤
+3. **自动嵌套检测** — 非原始类型字段自动递归过滤（无需 `#[casbin(nested)]`）
 
-[role_definition]
-g = _, _      # 用户-角色映射
-g2 = _, _     # 资源-资源组映射
-
-[policy_effect]
-e = !some(where (p.eft == deny))
-
-[matchers]
-m = g(r.sub, p.sub) && g2(r.obj, p.obj) && r.act == p.act
+**原始类型白名单**（这些类型不会递归）：
+```
+i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, f32, f64,
+isize, usize, String, str, bool, char
 ```
 
-**policy.csv 示例：**
+### 9.3 中间件配置
+
+权限过滤依赖 `casbin_auth` 中间件将 `enforcer` 和 `subject` 注入 Depot：
+
+```rust
+use genies_auth::{EnforcerManager, casbin_auth};
+use salvo::prelude::*;
+
+let mgr = Arc::new(EnforcerManager::new().await?);
+
+let router = Router::new()
+    .hoop(genies::context::auth::salvo_auth)  // JWT 认证
+    .hoop(affix_state::inject(mgr.clone()))    // 注入 EnforcerManager
+    .hoop(casbin_auth)                          // 权限中间件
+    .push(Router::with_path("/api/employees").get(get_employee));
+```
+
+### 9.4 policy.csv 示例
+
 ```csv
-p, alice, UserProfile.email, read, deny
-p, data_group_admin, data_group, read, deny
-g, alice, data_group_admin
-g2, UserProfile.credit_card, data_group
+# 字段级权限（黑名单模式：默认允许，deny 规则生效）
+p, guest, Employee.id_card_number, read, deny
+p, guest, Employee.base_salary, read, deny
+p, guest, BankAccount.account_number, read, deny
+
+# 角色继承
+g, alice, hr_admin
+g, bob, guest
+
+# 资源分组
+g2, Employee.base_salary, sensitive_data
+g2, Employee.id_card_number, sensitive_data
 ```
 
 ## 10. 缓存服务
@@ -421,20 +449,30 @@ status.deref_mut().insert("readinessProbe".to_string(), false);
 
 5. **订阅事件**
    - 使用 `#[topic]` 宏定义事件处理器
-   - 注册到路由中
+   - 使用 `dapr_event_router()` 自动注册路由
 
 6. **启动服务**
    ```rust
+   use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router, auth_admin_ui_router};
+   
    #[tokio::main]
    async fn main() {
        genies::config::log_config::init_log();
        CONTEXT.init_mysql().await;
        
+       // 初始化 Casbin Enforcer（可选）
+       let mgr = Arc::new(EnforcerManager::new().await.unwrap());
+       
        let router = Router::new()
-           .push(k8s_health_check())
+           .push(genies::k8s::k8s_health_check())
            .push(Router::with_path("/api")
                .hoop(genies::context::auth::salvo_auth)
-               .push(business_router()));
+               .hoop(affix_state::inject(mgr.clone()))
+               .hoop(casbin_auth)
+               .push(business_router())
+               .push(auth_admin_router()))  // 权限管理 API
+           .push(auth_admin_ui_router())    // 权限管理 UI
+           .push(genies::dapr_event_router());  // Dapr 事件路由
        
        let acceptor = TcpListener::new(&CONTEXT.config.server_url).bind().await;
        Server::new(acceptor).serve(router).await;
@@ -445,3 +483,45 @@ status.deref_mut().insert("readinessProbe".to_string(), false);
    - 配置 Dapr sidecar
    - 设置 K8s 健康检查探针
    - 通过环境变量覆盖配置
+
+## 15. Auth 模块
+
+`genies_auth` 提供完整的 Casbin 权限管理方案：
+
+### 公开 API
+
+| 导出项 | 说明 |
+|--------|------|
+| `EnforcerManager` | Casbin Enforcer 管理器，支持热更新 |
+| `casbin_auth` | API 接口权限中间件 |
+| `casbin_filter_object` | 嵌套字段过滤函数 |
+| `auth_admin_router()` | Admin API 路由（需认证） |
+| `auth_public_router()` | 公开 API 路由（Token 端点） |
+| `auth_admin_ui_router()` | Admin UI 静态资源路由 |
+| `extract_and_sync_schemas()` | OpenAPI Schema 同步到数据库 |
+
+### 快速集成
+
+```rust
+use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router, auth_admin_ui_router};
+use std::sync::Arc;
+
+// 1. 初始化 Enforcer
+let mgr = Arc::new(EnforcerManager::new().await?);
+
+// 2. 配置路由
+let router = Router::new()
+    .hoop(affix_state::inject(mgr.clone()))
+    .hoop(casbin_auth)
+    .push(auth_admin_router())   // /auth/policies, /auth/roles, ...
+    .push(auth_admin_ui_router());  // /auth/ui/
+```
+
+### Admin UI
+
+访问 `/auth/ui/` 可使用 Web 界面管理：
+- 策略规则（Policies）
+- 角色分配（Roles）
+- 用户组（Groups）
+- Casbin 模型配置
+- OpenAPI Schema 浏览

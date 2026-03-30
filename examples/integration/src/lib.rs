@@ -5,8 +5,6 @@
 //! 注意: 测试需要连接真实的 Redis 和 MySQL 服务器，
 //! 配置信息在 `application.yml` 中。
 
-use rbs::value;
-
 #[cfg(test)]
 mod redis_tests {
     use genies::context::CONTEXT;

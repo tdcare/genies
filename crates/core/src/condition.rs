@@ -1,11 +1,11 @@
 #![warn(unused_assignments)]
-#![warn(non_snake_case)]
 
 use serde::{Deserialize, Serialize};
 use serde_json::*;
 
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[allow(non_snake_case)]
 pub struct ConditionTree{
     #[serde(alias = "o")]
     pub operator:Option<String>,
@@ -21,8 +21,6 @@ pub struct ConditionTree{
 /// 参数： obj_value 对象序列化为json Value
 /// 参数：tree 条件表达式
 pub fn obj_test(obj_value:&Value,tree:&ConditionTree)->bool{
-    let mut  result=true;
-
     if obj_value.is_null(){
        return false
    }
@@ -35,13 +33,13 @@ pub fn obj_test(obj_value:&Value,tree:&ConditionTree)->bool{
         }
     };
 
-   if operator.eq("and"){
-       result=operator_and(obj_value,tree);
+   let result = if operator.eq("and"){
+       operator_and(obj_value,tree)
    }else if operator.eq("or") {
-       result=operator_or(obj_value,tree);
+       operator_or(obj_value,tree)
    }else {
-       result=compare(obj_value,tree,&operator);
-   }
+       compare(obj_value,tree,&operator)
+   };
     return result;
 }
 
@@ -125,7 +123,7 @@ fn compare_left_right( operator:&str,   left:&Value,  right:&str)->bool{
     if left.is_string(){
        let left_val=left.as_str().unwrap();
        let right_val=right;
-       match operator.clone() {
+       match operator {
            "="=>{
                result=left_val.eq(right_val);
            },
@@ -147,7 +145,7 @@ fn compare_left_right( operator:&str,   left:&Value,  right:&str)->bool{
     if left.is_i64(){
        let left_val=left.as_i64().unwrap();
        let right_val=right.parse::<i64>().unwrap();
-       match operator.clone() {
+       match operator {
            "<"=>{
                result=left_val<right_val;
            },
@@ -169,7 +167,7 @@ fn compare_left_right( operator:&str,   left:&Value,  right:&str)->bool{
     if left.is_u64(){
         let left_val=left.as_u64().unwrap();
         let right_val=right.parse::<u64>().unwrap();
-        match operator.clone() {
+        match operator {
             "<"=>{
                 result=left_val<right_val;
             },
@@ -191,7 +189,7 @@ fn compare_left_right( operator:&str,   left:&Value,  right:&str)->bool{
     if left.is_f64(){
         let left_val=left.as_f64().unwrap();
         let right_val=right.parse::<f64>().unwrap();
-        match operator.clone() {
+        match operator {
             "<"=>{
                 result=left_val<right_val;
             },

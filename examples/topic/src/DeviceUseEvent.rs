@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 #[event_type_version("V2")]
 #[event_source("me.tdcarefor.tdnis.device.domain.DeptDeviceEntity")]
 #[event_type("me.tdcarefor.tdnis.device.event.DeviceUseEvent")]
+#[allow(non_snake_case)]
 pub struct DeviceUseEvent {
     // private Integer id;
     pub id: Option<i64>,

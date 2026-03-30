@@ -1,6 +1,4 @@
-use std::sync::Arc;
 use std::sync::Once;
-use std::time::Duration;
 // use async_std::task;
 use genies_core::jwt::*;
 use serde::{Deserialize, Serialize};
@@ -9,7 +7,7 @@ use genies_cache::cache_service::CacheService;
 use rbatis::RBatis;
 // use rbdc::deadpool::managed::{PoolBuilder, Timeouts};
 // use rbdc::pool::{ManagerPorxy, Pool, RBDCManager};
-use rbdc_mysql::driver::MysqlDriver;
+// use rbdc_mysql::driver::MysqlDriver;
 // use deadpool_runtime::Runtime;
 
 // use tracing::{debug, error, info, span, warn, Level};

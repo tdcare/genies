@@ -7,7 +7,7 @@
 
 use quote::quote;
 use syn;
-use syn::{Data, DataStruct, DeriveInput, Field, Fields, FieldsNamed, Type};
+use syn::{Data, DataStruct, DeriveInput, Fields, FieldsNamed, Type};
 
 use crate::proc_macro::TokenStream;
 
