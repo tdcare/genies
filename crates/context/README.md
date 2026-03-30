@@ -1,6 +1,6 @@
 # genies_context
 
-Application context management library for the Genies framework, providing global context, database connections, cache services, and cross-service authentication.
+Application context management library for the Genies (神灯) framework, providing global context, database connections, cache services, and cross-service authentication.
 
 ## Overview
 
@@ -47,14 +47,13 @@ Application Start → CONTEXT (lazy_static) → init_mysql() → Ready
 
 ### 1. Add Dependency
 
-```toml
-[dependencies]
-genies_context = { path = "../path/to/genies_context" }
-genies_config = { path = "../path/to/genies_config" }
-genies_cache = { path = "../path/to/genies_cache" }
-genies_core = { path = "../path/to/genies_core" }
-rbatis = "4.x"
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_context genies_config genies_cache genies_core rbatis
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Initialize Database
 

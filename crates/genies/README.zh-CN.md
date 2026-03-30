@@ -1,6 +1,6 @@
 # genies
 
-Genies 框架的主入口 crate，提供所有子 crate 的统一 re-export 和便捷宏，用于 Rust 中的 DDD + Dapr 开发。
+Genies (神灯) 框架的主入口 crate，提供所有子 crate 的统一 re-export 和便捷宏，用于 Rust 中的 DDD + Dapr 开发。
 
 ## 概述
 
@@ -45,11 +45,11 @@ genies (主入口)
 
 ### 1. 添加依赖
 
-```toml
-[dependencies]
-genies = { path = "../path/to/genies" }
-genies_derive = { path = "../path/to/genies_derive" }
+```sh
+cargo add genies genies_derive
 ```
+
+> 也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ### 2. 访问子模块
 

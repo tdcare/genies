@@ -1,6 +1,6 @@
 # genies_k8s
 
-Kubernetes health probe endpoints for the Genies framework, providing liveness and readiness checks for Salvo-based microservices.
+Kubernetes health probe endpoints for the Genies (神灯) framework, providing liveness and readiness checks for Salvo-based microservices.
 
 ## Overview
 
@@ -54,11 +54,13 @@ Keys:
 
 ### 1. Add Dependency
 
-```toml
-[dependencies]
-genies_k8s = { path = "../path/to/genies_k8s" }
-genies_context = { path = "../path/to/genies_context" }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_k8s genies_context
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Add Health Endpoints to Router
 

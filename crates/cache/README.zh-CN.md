@@ -1,6 +1,6 @@
 # genies_cache
 
-Genies 框架的双后端缓存服务，支持 Redis 和内存存储。
+Genies (神灯) 框架的双后端缓存服务，支持 Redis 和内存存储。
 
 ## 概述
 
@@ -68,11 +68,11 @@ pub trait ICacheService: Sync + Send {
 
 ### 1. 添加依赖
 
-```toml
-[dependencies]
-genies_cache = { path = "../path/to/genies_cache" }
-genies_config = { path = "../path/to/genies_config" }
+```sh
+cargo add genies_cache genies_config
 ```
+
+> 也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ### 2. 配置后端
 

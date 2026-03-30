@@ -1,6 +1,6 @@
 # genies_cache
 
-Dual-backend caching service for the Genies framework, supporting both Redis and in-memory storage.
+Dual-backend caching service for the Genies (神灯) framework, supporting both Redis and in-memory storage.
 
 ## Overview
 
@@ -68,11 +68,13 @@ pub trait ICacheService: Sync + Send {
 
 ### 1. Add Dependency
 
-```toml
-[dependencies]
-genies_cache = { path = "../path/to/genies_cache" }
-genies_config = { path = "../path/to/genies_config" }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_cache genies_config
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Configure Backend
 

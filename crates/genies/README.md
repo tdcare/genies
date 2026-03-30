@@ -1,6 +1,6 @@
 # genies
 
-The main entry point for the Genies framework, providing a unified re-export of all sub-crates and convenient macros for DDD + Dapr development in Rust.
+The main entry point for the Genies (神灯) framework, providing a unified re-export of all sub-crates and convenient macros for DDD + Dapr development in Rust.
 
 ## Overview
 
@@ -45,11 +45,13 @@ genies (main entry)
 
 ### 1. Add Dependency
 
-```toml
-[dependencies]
-genies = { path = "../path/to/genies" }
-genies_derive = { path = "../path/to/genies_derive" }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies genies_derive
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Access Sub-modules
 

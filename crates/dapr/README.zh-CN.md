@@ -1,6 +1,6 @@
 # genies_dapr
 
-Genies 框架的 Dapr 集成库，提供 pub/sub 消息处理、CloudEvent 解析和自动 topic 订阅管理。
+Genies (神灯) 框架的 Dapr 集成库，提供 pub/sub 消息处理、CloudEvent 解析和自动 topic 订阅管理。
 
 ## 概述
 
@@ -49,13 +49,11 @@ CloudEvent → 解析 → 匹配 event_type → Handler(tx, event) → OK: SUCCE
 
 ### 1. 添加依赖
 
-```toml
-[dependencies]
-genies_dapr = { path = "../path/to/genies_dapr" }
-genies_derive = { path = "../path/to/genies_derive" }
-genies_ddd = { path = "../path/to/genies_ddd" }
-salvo = { version = "0.x" }
+```sh
+cargo add genies_dapr genies_derive genies_ddd salvo
 ```
+
+> 也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ### 2. 定义领域事件
 

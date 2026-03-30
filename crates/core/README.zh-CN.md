@@ -1,6 +1,6 @@
 # genies_core
 
-Genies 框架的核心工具库，提供响应模型、错误处理、JWT 认证和条件表达式求值功能。
+Genies (神灯) 框架的核心工具库，提供响应模型、错误处理、JWT 认证和条件表达式求值功能。
 
 ## 概述
 
@@ -156,10 +156,11 @@ let matches = obj_test(&obj, &condition);
 
 ### 1. 添加依赖
 
-```toml
-[dependencies]
-genies_core = { path = "../path/to/genies_core" }
+```sh
+cargo add genies_core
 ```
+
+> 也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ### 2. 在 Salvo Handler 中使用
 

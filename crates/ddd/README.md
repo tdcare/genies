@@ -1,6 +1,6 @@
 # genies_ddd
 
-A Domain-Driven Design (DDD) primitives library for the Genies framework, providing aggregate root patterns, domain events, and event publishing capabilities.
+A Domain-Driven Design (DDD) primitives library for the Genies (神灯) framework, providing aggregate root patterns, domain events, and event publishing capabilities.
 
 ## Overview
 
@@ -41,12 +41,14 @@ Aggregate → DomainEvent → publish() → Message (DB) → CDC/Outbox → Dapr
 
 ### 1. Add Dependency
 
-```toml
-[dependencies]
-genies_ddd = { path = "../path/to/genies_ddd" }
-genies_derive = { path = "../path/to/genies_derive" }
-serde = { version = "1.0", features = ["derive"] }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_ddd genies_derive
+cargo add serde --features derive
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Define an Aggregate Root
 

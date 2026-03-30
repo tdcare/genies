@@ -1,6 +1,6 @@
 # genies_config
 
-Configuration management module for the Genies framework, providing YAML-based configuration loading with derive macro support.
+Configuration management module for the Genies (神灯) framework, providing YAML-based configuration loading with derive macro support.
 
 ## Overview
 
@@ -55,12 +55,14 @@ genies_config provides a simple yet powerful configuration system for Genies mic
 
 ### 1. Add Dependencies
 
-```toml
-[dependencies]
-genies_config = { path = "../path/to/genies_config" }
-genies_derive = { path = "../path/to/genies_derive" }
-serde = { version = "1.0", features = ["derive"] }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_config genies_derive
+cargo add serde --features derive
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Create Configuration File
 

@@ -1,11 +1,11 @@
-# Genies
+# Genies (神灯)
 
 <p align="center">
   <strong>一个基于 Rust 的 DDD + Dapr 微服务开发框架</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/tdcare/genies"><img src="https://img.shields.io/badge/version-1.4.x-blue.svg" alt="version"></a>
+  <a href="https://github.com/tdcare/genies"><img src="https://img.shields.io/badge/version-1.5.0-blue.svg" alt="version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-edition%202021-orange.svg" alt="rust"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="license"></a>
 </p>
@@ -29,7 +29,7 @@
 
 ## 项目简介
 
-**Genies** 是一个专为 Rust 生态设计的微服务开发框架（v1.4.x），它将 **DDD（领域驱动设计）** 理念与 **Dapr 微服务运行时** 深度整合，同时保持与基于 **Eventuate** 的 Java 项目的兼容性。
+**Genies (神灯)** 是一个专为 Rust 生态设计的微服务开发框架（v1.5.0），它将 **DDD（领域驱动设计）** 理念与 **Dapr 微服务运行时** 深度整合，同时保持与基于 **Eventuate** 的 Java 项目的兼容性。
 
 框架通过 **宏驱动架构** 提供声明式的聚合根、领域事件、权限控制和配置管理能力，让开发者能够以最小的样板代码构建企业级微服务应用。
 
@@ -38,8 +38,8 @@
 | 组件 | 版本 | 用途 |
 |------|------|------|
 | **Rust** | Edition 2021 | 编程语言 |
-| **Salvo** | 0.79 | Web 框架 |
-| **RBatis** | 4.5 | ORM 框架 |
+| **Salvo** | 0.89 | Web 框架 |
+| **RBatis** | 4.8 | ORM 框架 |
 | **Tokio** | 1.22 | 异步运行时 |
 | **Casbin** | 2.10 | 权限引擎 |
 | **Redis** | - | 缓存服务 |
@@ -80,23 +80,24 @@
 
 ### 安装依赖
 
-在 `Cargo.toml` 中添加依赖：
+使用 `cargo add` 命令添加依赖（将自动获取最新版本）：
 
-```toml
-[dependencies]
+```sh
 # 主框架（包含所有子模块的重导出）
-genies = "1.4"
+cargo add genies
 
 # 过程宏库（如需单独使用宏）
-genies_derive = "1.4"
+cargo add genies_derive
 
 # 必需的依赖
-rbatis = { version = "4.5", features = ["debug_mode"] }
-tokio = { version = "1.22", features = ["full"] }
-salvo = { version = "0.79", features = ["rustls", "oapi", "affix-state"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+cargo add rbatis --features debug_mode
+cargo add tokio --features full
+cargo add salvo --features rustls,oapi,affix-state
+cargo add serde --features derive
+cargo add serde_json
 ```
+
+您也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ### 最小化示例
 

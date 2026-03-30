@@ -1,6 +1,6 @@
 # genies_k8s
 
-Genies 框架的 Kubernetes 健康探针端点，为基于 Salvo 的微服务提供存活和就绪检查。
+Genies (神灯) 框架的 Kubernetes 健康探针端点，为基于 Salvo 的微服务提供存活和就绪检查。
 
 ## 概述
 
@@ -54,11 +54,11 @@ pub static SERVICE_STATUS: Lazy<Mutex<HashMap<String, bool>>> = ...;
 
 ### 1. 添加依赖
 
-```toml
-[dependencies]
-genies_k8s = { path = "../path/to/genies_k8s" }
-genies_context = { path = "../path/to/genies_context" }
+```sh
+cargo add genies_k8s genies_context
 ```
+
+> 也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ### 2. 添加健康端点到路由
 

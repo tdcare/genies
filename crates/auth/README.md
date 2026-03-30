@@ -1,6 +1,6 @@
 # genies_auth
 
-A comprehensive RBAC permission management module for the Genies framework, powered by [Casbin](https://casbin.org/).
+A comprehensive RBAC permission management module for the Genies (神灯) framework, powered by [Casbin](https://casbin.org/).
 
 ## Overview
 
@@ -39,12 +39,13 @@ Request → salvo_auth(JWT) → casbin_auth(Permission) → Handler → Writer(F
 
 ### 1. Add Dependency
 
-```toml
-[dependencies]
-genies_auth = { path = "../path/to/genies_auth" }
-genies = { path = "../path/to/genies" }
-genies_derive = { path = "../path/to/genies_derive" }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_auth genies genies_derive
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Define Structs with Field-Level Permissions
 

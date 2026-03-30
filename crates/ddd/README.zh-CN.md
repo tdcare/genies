@@ -1,6 +1,6 @@
 # genies_ddd
 
-Genies 框架的领域驱动设计（DDD）基础库，提供聚合根模式、领域事件和事件发布能力。
+Genies (神灯) 框架的领域驱动设计（DDD）基础库，提供聚合根模式、领域事件和事件发布能力。
 
 ## 概述
 
@@ -41,12 +41,11 @@ genies_ddd 提供在 Rust 微服务中实现领域驱动设计的基础构建块
 
 ### 1. 添加依赖
 
-```toml
-[dependencies]
-genies_ddd = { path = "../path/to/genies_ddd" }
-genies_derive = { path = "../path/to/genies_derive" }
-serde = { version = "1.0", features = ["derive"] }
+```sh
+cargo add genies_ddd genies_derive serde --features serde/derive
 ```
+
+> 也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ### 2. 定义聚合根
 

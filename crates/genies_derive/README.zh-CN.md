@@ -1,6 +1,6 @@
 # genies_derive
 
-Genies 框架的过程宏库，为 DDD 聚合根、领域事件、配置管理、Dapr 事件消费、HTTP 请求包装和字段级权限控制提供派生宏和属性宏。
+Genies (神灯) 框架的过程宏库，为 DDD 聚合根、领域事件、配置管理、Dapr 事件消费、HTTP 请求包装和字段级权限控制提供派生宏和属性宏。
 
 ## 概述
 
@@ -18,11 +18,11 @@ genies_derive 提供 7 个核心宏，简化 DDD + Dapr + Casbin 应用中的常
 
 ## 快速开始
 
-```toml
-[dependencies]
-genies_derive = { path = "../path/to/genies_derive" }
-genies = { path = "../path/to/genies" }
+```sh
+cargo add genies_derive genies
 ```
+
+> 也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ## 宏参考
 

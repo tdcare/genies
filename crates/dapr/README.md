@@ -1,6 +1,6 @@
 # genies_dapr
 
-A Dapr integration library for the Genies framework, providing pub/sub messaging, CloudEvent handling, and automatic topic subscription management.
+A Dapr integration library for the Genies (神灯) framework, providing pub/sub messaging, CloudEvent handling, and automatic topic subscription management.
 
 ## Overview
 
@@ -49,13 +49,13 @@ CloudEvent → Parse → Match event_type → Handler(tx, event) → OK: SUCCESS
 
 ### 1. Add Dependency
 
-```toml
-[dependencies]
-genies_dapr = { path = "../path/to/genies_dapr" }
-genies_derive = { path = "../path/to/genies_derive" }
-genies_ddd = { path = "../path/to/genies_ddd" }
-salvo = { version = "0.x" }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_dapr genies_derive genies_ddd salvo
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Define Domain Event
 

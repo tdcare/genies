@@ -1,6 +1,6 @@
 # genies_derive
 
-A powerful procedural macro library for the Genies framework, providing derive macros and attribute macros for DDD aggregates, domain events, configuration, Dapr topic consumption, HTTP request wrapping, and field-level permission control.
+A powerful procedural macro library for the Genies (神灯) framework, providing derive macros and attribute macros for DDD aggregates, domain events, configuration, Dapr topic consumption, HTTP request wrapping, and field-level permission control.
 
 ## Overview
 
@@ -18,11 +18,13 @@ genies_derive provides 7 key macros that simplify common patterns in DDD + Dapr 
 
 ## Quick Start
 
-```toml
-[dependencies]
-genies_derive = { path = "../path/to/genies_derive" }
-genies = { path = "../path/to/genies" }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_derive genies
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ## Macro Reference
 

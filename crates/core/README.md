@@ -1,6 +1,6 @@
 # genies_core
 
-Core utilities and common types for the Genies framework, providing response models, error handling, JWT authentication, and conditional evaluation.
+Core utilities and common types for the Genies (神灯) framework, providing response models, error handling, JWT authentication, and conditional evaluation.
 
 ## Overview
 
@@ -156,10 +156,13 @@ let matches = obj_test(&obj, &condition);
 
 ### 1. Add Dependency
 
-```toml
-[dependencies]
-genies_core = { path = "../path/to/genies_core" }
+Use `cargo add` to add dependencies (automatically fetches the latest version):
+
+```sh
+cargo add genies_core
 ```
+
+You can also manually add dependencies in `Cargo.toml`. Visit [crates.io](https://crates.io) for the latest versions.
 
 ### 2. Use in Salvo Handler
 

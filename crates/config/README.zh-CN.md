@@ -1,6 +1,6 @@
 # genies_config
 
-Genies 框架的配置管理模块，提供基于 YAML 的配置加载和派生宏支持。
+Genies (神灯) 框架的配置管理模块，提供基于 YAML 的配置加载和派生宏支持。
 
 ## 概述
 
@@ -55,12 +55,11 @@ genies_config 为 Genies 微服务提供简单而强大的配置系统：
 
 ### 1. 添加依赖
 
-```toml
-[dependencies]
-genies_config = { path = "../path/to/genies_config" }
-genies_derive = { path = "../path/to/genies_derive" }
-serde = { version = "1.0", features = ["derive"] }
+```sh
+cargo add genies_config genies_derive serde --features serde/derive
 ```
+
+> 也可以手动在 `Cargo.toml` 中添加依赖，请前往 [crates.io](https://crates.io) 查看最新版本。
 
 ### 2. 创建配置文件
 
