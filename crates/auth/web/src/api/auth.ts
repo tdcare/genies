@@ -64,9 +64,20 @@ export interface SchemaRecord {
   http_method?: string
 }
 
+/**
+ * 从当前页面 URL 动态推断部署前缀
+ * 例如页面在 /sickbed/auth/ui/ 下加载时，返回 "/sickbed"
+ * 页面在 /auth/ui/ 下加载时，返回 ""
+ */
+function getApiBaseUrl(): string {
+  const path = window.location.pathname
+  const idx = path.indexOf('/auth/ui')
+  return idx > 0 ? path.substring(0, idx) : ''
+}
+
 // 创建 axios 实例
 const api = axios.create({
-  baseURL: '',
+  baseURL: getApiBaseUrl(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -80,7 +91,7 @@ let refreshTokenPromise: Promise<string> | null = null
 // 获取临时访问 Token（不需要认证）
 export async function getAccessToken(): Promise<{ access_token: string; expires_in: number; token_type: string }> {
   // 注意：这个请求不需要 Authorization header，所以直接用 axios 而不是 api 实例
-  const response = await axios.get<ApiResponse<{ access_token: string; expires_in: number; token_type: string }>>('/auth/token')
+  const response = await axios.get<ApiResponse<{ access_token: string; expires_in: number; token_type: string }>>(getApiBaseUrl() + '/auth/token')
   if (response.data.code === '0' && response.data.data) {
     return response.data.data
   }

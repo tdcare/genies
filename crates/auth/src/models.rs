@@ -28,8 +28,8 @@ pub async fn run_migrations() {
     let rbatis = Arc::new(CONTEXT.rbatis.clone());
     
     // 创建 RBatis 迁移驱动
-    // 第二个参数 None 表示使用默认的 schema history 表名
-    let driver = Arc::new(RbatisMigrationDriver::new(rbatis, None));
+    // 第二个参数指定自定义的 schema history 表名，避免与业务模块的迁移表冲突
+    let driver = Arc::new(RbatisMigrationDriver::new(rbatis, Some("auth_flyway_migrations")));
     
     // 创建迁移运行器
     // driver 同时作为执行器和历史记录器

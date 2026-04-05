@@ -1051,6 +1051,181 @@ pub fn device_router() -> Router {
 
 > **关键**：Java 的 `@RequestMapping("/device")` + `@PostMapping("/create")` 对应 Rust 的 `Router::with_path("device").push(Router::with_path("create").post(...))`。路径的每一级都必须完全一致。
 
+### 6.5 跨微服务远程调用（Java Remote → Rust #[remote]）
+
+Java 微服务间调用通常使用 `@FeignClient` 定义远程接口，Genies 框架提供 `#[remote]` 宏 + `feignhttp` 实现等价功能，并自动管理 Token 刷新。
+
+#### 6.5.1 Java Remote 接口（FeignClient）
+
+```java
+// Java — 典型的 FeignClient 远程调用接口
+@FeignClient(name = "patient-service", url = "${GATEWAY}")
+public interface PatientRemote {
+
+    @GetMapping("/api/patients/{id}")
+    PatientDTO getPatient(@PathVariable String id);
+
+    @PostMapping("/api/patients/search")
+    ResultDTO<List<PatientDTO>> searchPatients(@RequestBody PatientSearchRequest request);
+
+    @GetMapping("/api/patients")
+    ResultDTO<List<PatientDTO>> listPatients(@RequestParam String wardId,
+                                              @RequestParam Integer status);
+
+    @DeleteMapping("/api/patients/{id}")
+    ResultDTO<String> deletePatient(@PathVariable String id);
+}
+```
+
+#### 6.5.2 Rust #[remote] 宏对应写法
+
+```rust
+// Rust — 使用 #[remote] + feignhttp 宏实现等价的远程调用
+use genies_derive::remote;
+use feignhttp::{get, post, delete};
+
+/// GET /api/patients/{id} → PatientDTO
+#[remote]
+#[get("${GATEWAY}/api/patients/{id}")]
+pub async fn get_patient(#[path] id: String) -> feignhttp::Result<PatientDTO> {}
+
+/// POST /api/patients/search → ResultDTO<Vec<PatientDTO>>
+#[remote]
+#[post("${GATEWAY}/api/patients/search")]
+pub async fn search_patients(#[body] request: PatientSearchRequest) -> feignhttp::Result<ResultDTO<Vec<PatientDTO>>> {}
+
+/// GET /api/patients?wardId=xxx&status=xxx → ResultDTO<Vec<PatientDTO>>
+#[remote]
+#[get("${GATEWAY}/api/patients")]
+pub async fn list_patients(
+    #[param] ward_id: String,
+    #[param] status: i32,
+) -> feignhttp::Result<ResultDTO<Vec<PatientDTO>>> {}
+
+/// DELETE /api/patients/{id} → ResultDTO<String>
+#[remote]
+#[delete("${GATEWAY}/api/patients/{id}")]
+pub async fn delete_patient(#[path] id: String) -> feignhttp::Result<ResultDTO<String>> {}
+```
+
+> **注意**：每个 remote 函数的函数体为空 `{}`，实际的 HTTP 调用由 `feignhttp` 宏自动生成。`#[remote]` 必须放在 feignhttp 宏（`#[get]`/`#[post]`/`#[delete]` 等）的**上方**。
+
+#### 6.5.3 #[remote] 宏的工作机制
+
+`#[remote]` 宏展开后会生成两个函数：
+
+**1. 底层 feignhttp 函数 `{fn_name}_feignhttp`**
+
+```rust
+// 自动生成：带 Authorization header 的底层 HTTP 调用函数
+pub async fn get_patient_feignhttp(
+    #[header] Authorization: &str,
+    #[path] id: String,
+) -> feignhttp::Result<PatientDTO> {}
+```
+
+**2. 包装函数 `{fn_name}`（开发者实际调用的函数）**
+
+```rust
+// 自动生成：Token 管理 + 401 自动重试的包装函数
+pub async fn get_patient(id: String) -> feignhttp::Result<PatientDTO> {
+    // 1. 从全局 REMOTE_TOKEN 获取当前 access_token
+    let bearer = genies::context::REMOTE_TOKEN.lock().unwrap().access_token.clone();
+    let bearer = format!("Bearer {}", &bearer);
+
+    // 2. 使用 Bearer Token 发起 HTTP 请求
+    let mut result = get_patient_feignhttp(&bearer, id).await;
+
+    // 3. 如果返回 401 Unauthorized，自动从 Keycloak 刷新 Token 并重试
+    if result.is_err() && result.as_ref().err().unwrap().to_string().contains("401 Unauthorized") {
+        if let Ok(new_token) = genies::core::jwt::get_temp_access_token(
+            &genies::context::CONTEXT.config.keycloak_auth_server_url,
+            &genies::context::CONTEXT.config.keycloak_realm,
+            &genies::context::CONTEXT.config.keycloak_resource,
+            &genies::context::CONTEXT.config.keycloak_credentials_secret,
+        ).await {
+            // 更新全局 Token 并重试
+            genies::context::REMOTE_TOKEN.lock().unwrap().access_token = new_token.clone();
+            let bearer = format!("Bearer {}", &new_token);
+            result = get_patient_feignhttp(&bearer, id).await;
+        }
+    }
+    result
+}
+```
+
+> 开发者只需调用 `get_patient(id).await`，**无需手动传递 Authorization header**，Token 获取、刷新和重试都是自动完成的。
+
+#### 6.5.4 配置要求
+
+**1. application.yml — Keycloak 配置**
+
+`#[remote]` 宏的 Token 刷新依赖 Keycloak 客户端凭证模式（Client Credentials Grant），需要在 `application.yml` 中配置：
+
+```yaml
+# application.yml
+keycloak:
+  auth_server_url: "http://keycloak:8080/auth"     # Keycloak 服务地址
+  realm: "my-realm"                                  # Realm 名称
+  resource: "my-client"                              # Client ID
+  credentials_secret: "my-secret"                    # Client Secret
+```
+
+**2. GATEWAY 环境变量**
+
+`feignhttp` 宏中的 `${GATEWAY}` 会从环境变量读取，启动前需要设置：
+
+```bash
+# Linux/Mac
+export GATEWAY=http://api-gateway:8080
+
+# Windows PowerShell
+$env:GATEWAY = "http://api-gateway:8080"
+```
+
+也可以在代码中使用 `config_gateway!` 宏来配置：
+
+```rust
+use genies::config_gateway;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    pub static ref GATEWAY: String = config_gateway!("/patient");
+}
+```
+
+> `config_gateway!` 会根据 gateway 配置值自动判断：如果是 `http://` 或 `https://` 开头则使用网关地址，否则使用 Dapr sidecar 地址。
+
+#### 6.5.5 Java → Rust 迁移对照表
+
+| Java (FeignClient) | Rust (#[remote] + feignhttp) | 说明 |
+|---|---|---|
+| `@FeignClient(url = "${GATEWAY}")` | `#[remote]` + `#[get("${GATEWAY}/...")]` | 接口级 → 函数级 |
+| `@GetMapping("/path/{id}")` | `#[get("${GATEWAY}/path/{id}")]` | URL 中必须包含 `${GATEWAY}` 前缀 |
+| `@PostMapping("/path")` | `#[post("${GATEWAY}/path")]` | POST 请求 |
+| `@PutMapping("/path/{id}")` | `#[put("${GATEWAY}/path/{id}")]` | PUT 请求 |
+| `@DeleteMapping("/path/{id}")` | `#[delete("${GATEWAY}/path/{id}")]` | DELETE 请求 |
+| `@PathVariable String id` | `#[path] id: String` | 路径参数 |
+| `@RequestBody XXX body` | `#[body] body: XXX` | 请求体（自动 JSON 序列化） |
+| `@RequestParam String name` | `#[param] name: String` | 查询参数 |
+| `@RequestHeader String token` | `#[header] token: String` | 请求头（`#[remote]` 已自动处理 Authorization） |
+| `ResultDTO<T>` 返回类型 | `feignhttp::Result<ResultDTO<T>>` | 返回类型需要包装在 `feignhttp::Result` 中 |
+| Spring 自动注入 `@Autowired` | 直接调用函数 `get_patient(id).await` | 无需依赖注入，直接 `use` 后调用 |
+
+#### 6.5.6 注意事项
+
+1. **所有 remote 函数必须是 `async fn`** — `#[remote]` 宏在编译期会检查，非 async 函数会直接 panic
+2. **返回类型使用 `feignhttp::Result<T>`** — 其中 `T` 必须实现 `serde::Deserialize`
+3. **`${GATEWAY}` 环境变量必须在启动前配置** — feignhttp 在运行时从环境变量读取
+4. **Token 管理完全自动** — 不需要手动获取或传递 Token，`#[remote]` 宏自动处理
+5. **函数体为空** — remote 函数的函数体写 `{}` 即可，不要写任何逻辑
+6. **一个函数对应一个接口** — Java 中一个 `@FeignClient` 接口包含多个方法，Rust 中拆成独立的函数，通常放在同一个 `remote.rs` 模块中
+7. **Cargo.toml 需要添加 feignhttp 依赖**：
+   ```toml
+   [dependencies]
+   feignhttp = "0.5"
+   ```
+
 ---
 
 ## 7. 接口对比测试方案

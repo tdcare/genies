@@ -1,7 +1,8 @@
+use salvo::oapi::ToSchema;
 use serde::{Deserialize, Serialize};
 
 /// 兼容 Spring Data Sort 的 JSON 结构
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, ToSchema)]
 pub struct Sort {
     pub empty: bool,
     pub sorted: bool,
@@ -20,7 +21,7 @@ impl Sort {
 }
 
 /// 兼容 Spring Data Pageable 的 JSON 结构
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Pageable {
     pub page_number: i64,
@@ -45,9 +46,9 @@ pub struct Pageable {
 /// let rbatis_page: Page<MyEntity> = /* 查询结果 */;
 /// let spring_page: SpringPage<MyVO> = SpringPage::from_rbatis_page(rbatis_page, |e| e.into());
 /// ```
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SpringPage<T> {
+pub struct SpringPage<T: ToSchema> {
     pub content: Vec<T>,
     pub pageable: Pageable,
     pub last: bool,
@@ -61,7 +62,7 @@ pub struct SpringPage<T> {
     pub empty: bool,
 }
 
-impl<T> SpringPage<T> {
+impl<T: ToSchema> SpringPage<T> {
     /// 从 RBatis Page 转换为 SpringPage，同时转换记录类型。
     ///
     /// # 参数
@@ -107,7 +108,7 @@ impl<T> SpringPage<T> {
     }
 }
 
-impl<T: Send + Sync> From<rbatis::plugin::page::Page<T>> for SpringPage<T> {
+impl<T: ToSchema + Send + Sync> From<rbatis::plugin::page::Page<T>> for SpringPage<T> {
     fn from(p: rbatis::plugin::page::Page<T>) -> Self {
         Self::from_rbatis_page(p, |e| e)
     }

@@ -654,7 +654,7 @@ assert!(obj_test(&obj, &tree));
 |-------|------|------|
 | **genies** | 1.4.5 | 主框架入口，重导出所有子 crate，提供便捷宏 `pool!`、`tx_defer!`、`copy!`、`config_gateway!` |
 | **genies_core** | 1.4.4 | 核心基础设施：错误处理、JWT 验证、HTTP 响应模型、条件查询 |
-| **genies_derive** | 1.4.5 | 过程宏库：`DomainEvent`、`Aggregate`、`Config`、`ConfigCore`、`topic`、`wrapper`、`casbin` |
+| **genies_derive** | 1.4.5 | 过程宏库：`DomainEvent`、`Aggregate`、`Config`、`ConfigCore`、`topic`、`remote`、`casbin` |
 | **genies_config** | 1.4.2 | 配置管理：`ApplicationConfig` 定义、日志配置初始化 |
 | **genies_context** | 1.4.3 | 全局上下文：`CONTEXT`、`REMOTE_TOKEN`、`SERVICE_STATUS`、JWT 认证中间件 |
 | **genies_cache** | 1.4.2 | 缓存抽象层：`CacheService`、`ICacheService`、Redis/内存双后端 |
@@ -874,7 +874,7 @@ let token = REMOTE_TOKEN.lock().unwrap().access_token.clone();
 REMOTE_TOKEN.lock().unwrap().access_token = "new_token".to_string();
 ```
 
-注意：使用 `#[wrapper]` 宏时会自动管理 Token 刷新，一般不需要手动操作。
+注意：使用 `#[remote]` 宏时会自动管理 Token 刷新，一般不需要手动操作。
 
 ## 集成测试示例
 

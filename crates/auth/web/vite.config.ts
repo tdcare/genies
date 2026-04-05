@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue()],
-  base: '/auth/ui/',
+  base: './',
   build: {
     outDir: '../static',
     emptyOutDir: true

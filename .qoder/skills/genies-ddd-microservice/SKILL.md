@@ -22,7 +22,7 @@ description: Guide for developing Rust microservices using Genies framework foll
 
 | Java 层 | Rust/Genies 实现 |
 |---------|-----------------|
-| 接口层 | Salvo `#[handler]` + `Router` 配置 |
+| 接口层 | Salvo `#[endpoint]` + `Router` 配置（自动生成 OpenAPI 文档） |
 | 应用层 | 应用服务 `async fn` + `#[topic]` 事件消费者 |
 | 领域层 | `#[derive(Aggregate)]` 聚合根 + `#[derive(DomainEvent)]` 事件 + RBatis |
 | 基础设施层 | `genies_config` + `genies_context` + `flyway-rs` 迁移 + RBatis ORM |
@@ -256,7 +256,7 @@ pub async fn on_device_created(
 use salvo::oapi::ToSchema;
 use serde::{Deserialize, Serialize};
 
-/// 请求 DTO — 普通 Deserialize 即可
+/// 请求 DTO — 必须 derive ToSchema 以支持 OpenAPI 文档自动生成
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct DeviceBindRequest {
     pub serial_number: String,
@@ -264,6 +264,7 @@ pub struct DeviceBindRequest {
 }
 
 /// 响应 DTO — 必须加 #[casbin] 实现字段级动态权限过滤
+/// 同时 derive ToSchema 确保 OpenAPI Schema 正确注册
 /// 这是 Genies 独有能力，Java 中无对应机制
 use genies_derive::casbin;
 
@@ -333,81 +334,85 @@ DeviceEntity::insert(rb, &entity).await.unwrap();
 
 ## 6. 接口层 (Interface/API Layer)
 
-### 6.1 Salvo Handler
+### 6.1 Salvo Endpoint
 
-对应 Java 的 `@RestController`：
+对应 Java 的 `@RestController`。使用 `#[endpoint]` 而非 `#[handler]`，以自动生成 OpenAPI 文档。配合 OpenAPI 提取器（`PathParam`、`QueryParam`、`JsonBody`）可自动生成参数文档：
 
 ```rust
 use salvo::prelude::*;
+use salvo::oapi::extract::*;
 use genies::core::RespVO;
 
-/// 写操作 — 返回 RespVO（无需字段过滤）
-#[handler]
-pub async fn bind_device(req: &mut Request, res: &mut Response) {
-    let dto: DeviceBindRequest = req.parse_json().await.unwrap();
+/// 写操作 — 使用 JsonBody 提取请求体，自动生成 OpenAPI 请求文档
+#[endpoint]
+pub async fn bind_device(body: JsonBody<DeviceBindRequest>) -> Json<RespVO<String>> {
+    let dto = body.into_inner();
     match DeviceAppService::bind_device(&dto.serial_number).await {
-        Ok(id) => { res.render(Json(RespVO::from(&Ok::<_, String>(id)))); }
-        Err(e) => { res.render(Json(RespVO::<String>::from_error(&e))); }
+        Ok(id) => Json(RespVO::from(&Ok::<_, String>(id))),
+        Err(e) => Json(RespVO::<String>::from_error(&e)),
     }
 }
 
-/// 读操作 — 返回 #[casbin] 标记的 VO，自动过滤敏感字段
-/// #[casbin] 生成的 Writer trait 会从 Depot 提取 enforcer + subject，
-/// 根据 Casbin 策略动态隐藏 deny 的字段后再序列化为 JSON
-#[handler]
-pub async fn get_device(req: &mut Request, depot: &mut Depot, res: &mut Response) {
-    let id: String = req.param("id").unwrap();
-    match DeviceAppService::get_device(&id).await {
-        Ok(vo) => { res.render(vo); }   // 直接 render，#[casbin] Writer 自动过滤字段
-        Err(e) => { res.render(Json(RespVO::<String>::from_error(&e))); }
-    }
+/// 读操作 — 使用 PathParam 提取路径参数
+/// 返回 #[casbin] 标记的 VO，Writer 自动过滤敏感字段
+#[endpoint]
+pub async fn get_device(id: PathParam<String>) -> DeviceVO {
+    let device_id = id.into_inner();
+    DeviceAppService::get_device(&device_id).await.unwrap()
+    // #[casbin] Writer 自动从 Depot 提取 enforcer + subject 并过滤字段
 }
 
-/// 列表查询 — Vec<T> 中每个元素都会自动过滤
-#[handler]
-pub async fn list_devices(req: &mut Request, depot: &mut Depot, res: &mut Response) {
-    let page_index: u64 = req.query("page_index").unwrap_or(0);
-    let page_size: u64 = req.query("page_size").unwrap_or(20);
-    let devices: Vec<DeviceVO> = DeviceAppService::list_devices(page_index, page_size).await;
-    res.render(Json(devices));  // Vec<#[casbin]> 每个元素独立过滤
+/// 列表查询 — 使用 QueryParam 提取分页参数
+#[endpoint]
+pub async fn list_devices(
+    page_index: QueryParam<u64, false>,
+    page_size: QueryParam<u64, false>,
+) -> Json<Vec<DeviceVO>> {
+    let idx = page_index.into_inner().unwrap_or(0);
+    let size = page_size.into_inner().unwrap_or(20);
+    let devices = DeviceAppService::list_devices(idx, size).await;
+    Json(devices)
 }
 ```
 
 > **关键区别**：Java 中 Controller 返回的所有字段对所有角色可见；Genies 中 `#[casbin]` VO 的字段会根据当前请求者的角色动态隐藏，无需额外代码。
 
-### 6.3 分页查询 Handler（Spring Data Page 兼容）
+### 6.3 分页查询 Endpoint（Spring Data Page 兼容）
 
 当需要与 Java 服务保持分页响应格式完全一致时，使用 `SpringPage` 将 RBatis 分页结果转换为 Spring Data `Page<T>` 兼容格式：
 
 ```rust
 use salvo::prelude::*;
+use salvo::oapi::extract::*;
 use genies::core::ResultDTO;
 use genies::context::CONTEXT;
 use genies_core::page::SpringPage;
 use rbatis::plugin::page::PageRequest;
 
-/// 分页查询 — 返回 Spring Data Page 兼容格式
-#[handler]
-pub async fn page_search_devices(req: &mut Request, res: &mut Response) {
-    // 接收 Spring Data 风格的 page/size 参数（page 从 0 开始）
-    let page: u64 = req.query("page").unwrap_or(0);
-    let size: u64 = req.query("size").unwrap_or(20);
-    let name: Option<String> = req.query("name");
+/// 分页查询 — 使用 QueryParam 提取参数，返回 Spring Data Page 兼容格式
+#[endpoint]
+pub async fn page_search_devices(
+    page: QueryParam<u64, false>,
+    size: QueryParam<u64, false>,
+    name: QueryParam<String, false>,
+) -> Json<ResultDTO<SpringPage<DeviceVO>>> {
+    let page_val = page.into_inner().unwrap_or(0);
+    let size_val = size.into_inner().unwrap_or(20);
+    let name_val = name.into_inner().unwrap_or_default();
 
     let rb = &CONTEXT.rbatis;
     // 转换为 RBatis PageRequest（page_no 从 1 开始，即 page + 1）
-    let page_req = PageRequest::new(page + 1, size);
+    let page_req = PageRequest::new(page_val + 1, size_val);
 
     // 执行分页查询
     let rbatis_page = DeviceEntity::select_page(
-        rb, &page_req, &name.unwrap_or_default()
+        rb, &page_req, &name_val
     ).await.unwrap();
 
     // 转换为 SpringPage（同时将 Entity 转为 VO）
     let spring_page: SpringPage<DeviceVO> = SpringPage::from_rbatis_page(rbatis_page, |e| e.into());
 
-    // 用 ResultDTO 包装返回
-    res.render(Json(ResultDTO::success("查询成功", spring_page)));
+    Json(ResultDTO::success("查询成功", spring_page))
 }
 ```
 
@@ -428,6 +433,114 @@ pub fn device_router() -> Router {
         .push(Router::with_path("{id}").get(get_device))
 }
 ```
+
+### 6.4 OpenAPI 集成与 Schema 同步
+
+#### 为什么必须用 `#[endpoint]`
+
+Genies 项目中所有 HTTP handler 必须使用 `#[endpoint]` 而非 `#[handler]`，原因：
+
+1. **OpenAPI 文档自动生成** — `#[endpoint]` 会将函数签名（参数类型、返回类型）自动注册到 OpenAPI spec，`#[handler]` 不会
+2. **权限 Schema 注册** — `extract_and_sync_schemas(&doc)` 依赖 OpenAPI doc 中的 Schema 信息，将所有 DTO 字段同步到 `auth_api_schemas` 表，供 `#[casbin]` 字段级权限使用
+
+> `#[endpoint]` 的函数签名与 `#[handler]` 完全相同，迁移只需替换宏名即可。
+
+#### OpenAPI 参数提取方式
+
+使用 `#[endpoint]` 时，推荐使用 OpenAPI 提取器替代手动从 `Request` 提取参数。提取器会自动在 OpenAPI 文档中生成参数描述：
+
+| `#[handler]` 旧写法 | `#[endpoint]` 新写法 | 说明 |
+|---------------------|---------------------|------|
+| `req.param::<T>("name")` | `name: PathParam<T>` | 路径参数 `/device/{id}` |
+| `req.query::<T>("name")` | `name: QueryParam<T, REQUIRED>` | 查询参数 `?page=0&size=20` |
+| `req.parse_json::<T>().await` | `body: JsonBody<T>` | JSON 请求体 |
+| `res.render(Json(data))` | `-> Json<T>` 返回值 | 响应体（自动生成响应 Schema） |
+
+> `QueryParam<T, false>` 表示可选参数，`QueryParam<T, true>` 表示必填参数。
+
+**迁移示例：**
+
+```rust
+// ❌ 旧写法 — 不生成 OpenAPI 参数文档
+#[handler]
+async fn find_by_id(req: &mut Request, res: &mut Response) {
+    let id: String = req.param::<String>("id").unwrap();
+    let result = DeviceAppService::get_device(&id).await.unwrap();
+    res.render(Json(result));
+}
+
+// ✅ 新写法 — 自动生成 OpenAPI 参数 + 响应文档
+use salvo::oapi::extract::*;
+
+#[endpoint]
+async fn find_by_id(id: PathParam<String>) -> Json<DeviceVO> {
+    let result = DeviceAppService::get_device(&id.into_inner()).await.unwrap();
+    Json(result)
+}
+```
+
+#### DTO 必须 derive ToSchema
+
+所有请求/响应 DTO 必须添加 `#[derive(ToSchema)]`，否则 OpenAPI 文档中不会包含其 Schema 定义：
+
+```rust
+use salvo::oapi::ToSchema;
+use serde::{Deserialize, Serialize};
+use genies_derive::casbin;
+
+/// 请求 DTO
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DeviceBindRequest {
+    pub serial_number: String,
+    pub department_id: String,
+}
+
+/// 响应 DTO — #[casbin] + ToSchema 联合使用
+#[casbin]
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DeviceVO {
+    pub id: String,
+    pub name: String,
+    pub serial_number: String,
+    pub status: i32,
+}
+```
+
+#### Schema 同步步骤
+
+在 `main()` 中构建路由后，调用 `extract_and_sync_schemas` 将 OpenAPI Schema 同步到权限系统数据库：
+
+```rust
+use genies_auth::extract_and_sync_schemas;
+use salvo::oapi::OpenApi;
+
+// 1. 构建业务路由
+let router = Router::new()
+    .push(Router::with_path("api/v1")
+        .push(device_router()));
+
+// 2. 生成 OpenAPI 文档
+let doc = OpenApi::new("my-service", "1.0.0").merge_router(&router);
+
+// 3. 同步 Schema 到数据库（auth_api_schemas 表）
+extract_and_sync_schemas(&doc).await.ok();
+
+// 4. 挂载 Enforcer 中间件（在 Schema 同步之后）
+let mgr = Arc::new(EnforcerManager::new().await.unwrap());
+let router = router
+    .hoop(genies::context::auth::salvo_auth)
+    .hoop(affix_state::inject(mgr.clone()))
+    .hoop(casbin_auth);
+```
+
+#### 与 `#[casbin]` 字段级权限的配合
+
+完整流程：
+
+1. DTO 添加 `#[derive(ToSchema)]` → OpenAPI 文档包含其字段定义
+2. `extract_and_sync_schemas(&doc)` → 字段信息写入 `auth_api_schemas` 表
+3. Admin UI 中基于 Schema 配置字段级 deny 策略
+4. 响应 DTO 添加 `#[casbin]` → Writer 层根据策略自动过滤字段
 
 ## 7. 基础设施层 (Infrastructure Layer)
 
@@ -487,6 +600,7 @@ SQL 注解语法：`--! may_fail: true`（`--!` 前缀 + YAML 格式）
 ```rust
 use salvo::prelude::*;
 use genies::context::CONTEXT;
+use genies_auth::{EnforcerManager, casbin_auth, extract_and_sync_schemas};
 
 #[tokio::main]
 async fn main() {
@@ -502,10 +616,14 @@ async fn main() {
             .push(my_service::interfaces::router::device_router())
         );
 
-    // 4. Dapr 订阅路由（自动收集 #[topic] 注册的处理器）
+    // 4. 生成 OpenAPI 文档并同步 Schema 到权限系统
+    let doc = OpenApi::new("my-service", "1.0.0").merge_router(&router);
+    extract_and_sync_schemas(&doc).await.ok();
+
+    // 5. Dapr 订阅路由（自动收集 #[topic] 注册的处理器）
     let router = router.push(genies::dapr::dapr_router());
 
-    // 5. 启动服务
+    // 6. 启动服务
     let acceptor = TcpListener::new("0.0.0.0:8080").bind().await;
     Server::new(acceptor).serve(router).await;
 }
@@ -552,12 +670,13 @@ anyhow = "1.0"
 | `DomainEventHandlersBuilder.forAggregateType()` | `#[topic(name = "AggType")]` |
 | `@Service` 应用服务 | `pub struct XxxAppService` + `async fn` |
 | `@Service` 域服务 | `pub struct XxxDomainService` + `async fn` |
-| `@RestController` | `#[handler]` + `Router` |
+| `@RestController` | `#[endpoint]` + `Router`（自动生成 OpenAPI 文档） |
 | `@Autowired Repository` | `CONTEXT.rbatis` + RBatis CRUD 宏 |
 | `Spring @Transactional` | `rb.acquire_begin()` ... `tx.commit()` |
 | `ResultDTO<T>` | `RespVO<T>` |
-| `@RequestBody` | `req.parse_json::<T>()` |
-| `@RequestParam` | `req.query::<T>("key")` |
+| `@RequestBody` | `body: JsonBody<T>`（OpenAPI 提取器） |
+| `@RequestParam` | `name: QueryParam<T, REQUIRED>`（OpenAPI 提取器） |
+| `@PathVariable` | `id: PathParam<T>`（OpenAPI 提取器） |
 | `Pageable / Page<T>` | `PageRequest::new(page_no, page_size)` + RBatis `select_page` |
 | `JpaSpecificationExecutor` | RBatis `#[py_sql]` 动态 SQL |
 | `DomainEventDispatcher` + `ConsumersConfig` | `#[topic]` 宏自动注册 |
@@ -822,7 +941,8 @@ impl DrugAdviceEntity {
 - **聚合根**应包含业务规则验证，工厂方法返回 `(Entity, Event)` 元组
 - **域服务**处理跨实体逻辑，不直接暴露给接口层
 - **应用服务**编排用例，管理事务边界（`acquire_begin` / `commit`）
-- **Handler** 只做参数解析和响应格式化，不含业务逻辑
+- **Handler** 只做参数解析和响应格式化，不含业务逻辑；必须使用 `#[endpoint]` 以生成 OpenAPI 文档
+- **所有请求/响应 DTO 必须 `#[derive(ToSchema)]`** — 确保 OpenAPI Schema 正确注册
 - **所有响应 DTO 必须加 `#[casbin]`** — 实现字段级动态权限过滤（Genies 独有能力）
 - **路由必须挂载 `casbin_auth()` 中间件** — 提供 API 级访问控制，并为 `#[casbin]` 注入 enforcer/subject
 - 每个聚合根对应独立的 `migrations/` 目录

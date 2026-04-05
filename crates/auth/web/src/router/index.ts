@@ -33,8 +33,21 @@ const routes: RouteRecordRaw[] = [
   }
 ]
 
+/**
+ * 从当前页面 URL 动态推断 auth UI 的路由基路径
+ * 例如页面在 /sickbed/auth/ui/ 下时，返回 "/sickbed/auth/ui/"
+ */
+function getRouterBase(): string {
+  const path = window.location.pathname
+  const idx = path.indexOf('/auth/ui')
+  if (idx >= 0) {
+    return path.substring(0, idx) + '/auth/ui/'
+  }
+  return '/auth/ui/'
+}
+
 const router = createRouter({
-  history: createWebHistory('/auth/ui/'),
+  history: createWebHistory(getRouterBase()),
   routes
 })
 

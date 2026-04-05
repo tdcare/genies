@@ -48,7 +48,7 @@ serde_json = "1.0"
 | `#[derive(Config)]` | 定义配置结构 | `#[derive(Config)] struct MyConfig {...}` |
 | `#[derive(ConfigCore)]` | 框架内部配置（避免循环依赖） | 同 Config |
 | `#[casbin]` | 字段级权限控制（Writer 层过滤） | `#[casbin] #[derive(Serialize)] struct User {...}` |
-| `#[wrapper]` | HTTP 调用包装（自动刷新 Token） | `#[wrapper] #[get("...")] async fn ...` |
+| `#[remote]` | HTTP 调用包装（自动刷新 Token） | `#[remote] #[get("...")] async fn ...` |
 
 ## 4. 聚合根定义
 
@@ -359,13 +359,13 @@ redis_url: "redis://:password@localhost:6379"
 
 ## 11. HTTP 包装器
 
-使用 `#[wrapper]` 宏包装跨微服务 HTTP 调用：
+使用 `#[remote]` 宏包装跨微服务 HTTP 调用：
 
 ```rust
-use genies_derive::wrapper;
+use genies_derive::remote;
 use feignhttp::get;
 
-#[wrapper]
+#[remote]
 #[get("${gateway}/user-service/api/users/{id}")]
 pub async fn get_user_by_id(#[path] id: i64) -> feignhttp::Result<User> {}
 
@@ -428,7 +428,119 @@ let mut status = SERVICE_STATUS.lock().unwrap();
 status.deref_mut().insert("readinessProbe".to_string(), false);
 ```
 
-## 14. 典型开发流程
+## 14. OpenAPI 集成
+
+Genies 项目使用 Salvo 的 OpenAPI 能力自动生成 API 文档，并与 `genies_auth` 权限系统联动。
+
+### 14.1 `#[endpoint]` vs `#[handler]`
+
+所有 HTTP handler **必须使用 `#[endpoint]`** 而非 `#[handler]`：
+
+- `#[endpoint]` — 自动将函数签名注册到 OpenAPI 文档，支持 Schema 同步到权限系统
+- `#[handler]` — 不生成 OpenAPI 文档，无法被 `extract_and_sync_schemas` 识别
+
+> 两者函数签名完全相同，迁移只需替换宏名。
+
+### 14.2 OpenAPI 参数提取方式
+
+使用 `#[endpoint]` 时，推荐使用 OpenAPI 提取器替代手动从 `Request` 提取参数。提取器会自动在 OpenAPI 文档中生成参数描述：
+
+| `#[handler]` 旧写法 | `#[endpoint]` 新写法 | 说明 |
+|---------------------|---------------------|------|
+| `req.param::<T>("name")` | `name: PathParam<T>` | 路径参数 `/users/{id}` |
+| `req.query::<T>("name")` | `name: QueryParam<T, REQUIRED>` | 查询参数 `?page=0` |
+| `req.parse_json::<T>().await` | `body: JsonBody<T>` | JSON 请求体 |
+| `res.render(Json(data))` | `-> Json<T>` 返回值 | 响应体（自动生成响应 Schema） |
+
+> `QueryParam<T, false>` 表示可选参数，`QueryParam<T, true>` 表示必填参数。
+
+**完整示例：**
+
+```rust
+use salvo::prelude::*;
+use salvo::oapi::extract::*;
+
+/// Path 参数 — 替代 req.param
+#[endpoint]
+async fn find_by_id(id: PathParam<String>) -> Json<DeviceVO> {
+    let result = DeviceAppService::get_device(&id.into_inner()).await.unwrap();
+    Json(result)
+}
+
+/// Query 参数 — 替代 req.query
+#[endpoint]
+async fn list(department_id: QueryParam<String, false>) -> Json<Vec<DeviceVO>> {
+    let dept = department_id.into_inner().unwrap_or_default();
+    let devices = DeviceAppService::list_by_dept(&dept).await;
+    Json(devices)
+}
+
+/// JSON Body — 替代 req.parse_json
+#[endpoint]
+async fn add(body: JsonBody<DeviceBindRequest>) -> Json<RespVO<String>> {
+    let dto = body.into_inner();
+    match DeviceAppService::create(&dto).await {
+        Ok(id) => Json(RespVO::from(&Ok::<_, String>(id))),
+        Err(e) => Json(RespVO::<String>::from_error(&e)),
+    }
+}
+```
+
+### 14.3 DTO 必须 derive ToSchema
+
+所有请求/响应 DTO 必须添加 `#[derive(ToSchema)]`，确保 OpenAPI 文档包含完整的 Schema 定义：
+
+```rust
+use salvo::oapi::ToSchema;
+use serde::{Deserialize, Serialize};
+use genies_derive::casbin;
+
+/// 请求 DTO
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DeviceBindRequest {
+    pub serial_number: String,
+}
+
+/// 响应 DTO — #[casbin] + ToSchema 联合使用
+#[casbin]
+#[derive(Deserialize, ToSchema)]
+pub struct DeviceVO {
+    pub id: String,
+    pub name: String,
+    pub serial_number: String,  // 敏感字段，可被权限策略隐藏
+}
+```
+
+### 14.4 Schema 同步到权限系统
+
+启动时调用 `extract_and_sync_schemas(&doc)` 将 OpenAPI Schema 中的所有 DTO 字段信息同步到 `auth_api_schemas` 表，供 Admin UI 配置字段级权限：
+
+```rust
+use genies_auth::extract_and_sync_schemas;
+use salvo::oapi::OpenApi;
+
+// 构建路由（所有 handler 使用 #[endpoint]）
+let router = Router::new()
+    .push(Router::with_path("/api")
+        .push(business_router()));
+
+// 生成 OpenAPI 文档并同步 Schema
+let doc = OpenApi::new("my-service", "1.0.0").merge_router(&router);
+extract_and_sync_schemas(&doc).await.ok();
+```
+
+### 14.5 与 `#[casbin]` 字段级权限的配合
+
+完整链路：
+
+1. DTO 添加 `#[derive(ToSchema)]` → OpenAPI 文档包含字段定义
+2. `extract_and_sync_schemas(&doc)` → 字段信息写入 `auth_api_schemas` 表
+3. 通过 Admin UI（`/auth/ui/`）基于 Schema 配置字段级 deny 策略
+4. 响应 DTO 添加 `#[casbin]` → Writer 层在序列化时根据策略自动过滤字段
+
+> 如果 DTO 不 derive ToSchema，`extract_and_sync_schemas` 无法提取其字段，Admin UI 中将看不到该 DTO 的字段列表。
+
+## 15. 典型开发流程
 
 1. **项目初始化**
    - 创建 Cargo.toml 添加依赖
@@ -484,7 +596,7 @@ status.deref_mut().insert("readinessProbe".to_string(), false);
    - 设置 K8s 健康检查探针
    - 通过环境变量覆盖配置
 
-## 15. Auth 模块
+## 16. Auth 模块
 
 `genies_auth` 提供完整的 Casbin 权限管理方案：
 

@@ -1,6 +1,6 @@
 ---
 name: derive-usage
-description: Guide for using genies_derive procedural macros. Use when implementing DDD aggregates with #[derive(Aggregate)], domain events with #[derive(DomainEvent)], configuration loading with #[derive(Config)], Dapr topic consumption with #[topic], HTTP request wrapping with #[wrapper], or field-level permission control with #[casbin].
+description: Guide for using genies_derive procedural macros. Use when implementing DDD aggregates with #[derive(Aggregate)], domain events with #[derive(DomainEvent)], configuration loading with #[derive(Config)], Dapr topic consumption with #[topic], HTTP request wrapping with #[remote], or field-level permission control with #[casbin].
 ---
 
 # Procedural Macros (genies_derive)
@@ -15,7 +15,7 @@ genies_derive 提供 7 个核心过程宏，用于简化 DDD + Dapr + Casbin 应
 - `#[derive(Config)]` - 配置派生，支持 YAML + ENV 加载
 - `#[derive(ConfigCore)]` - 内部配置派生（避免循环依赖）
 - `#[topic(...)]` - Dapr topic 消费，Redis 幂等
-- `#[wrapper(...)]` - HTTP 请求包装，JWT 自动刷新
+- `#[remote(...)]` - HTTP 请求包装，JWT 自动刷新
 - `#[casbin]` - 字段级权限控制，自动嵌套检测
 
 ## Dependencies
@@ -220,17 +220,17 @@ SET NX (原子) → 处理 → SET CONSUMED
 失败自动 rollback，删除 key，Dapr 重发
 ```
 
-## Macro 6: #[wrapper]
+## Macro 6: #[remote]
 
 feignhttp 请求包装，401 时自动刷新 JWT。
 
 ### Example
 
 ```rust
-use genies_derive::wrapper;
+use genies_derive::remote;
 use feignhttp::get;
 
-#[wrapper]
+#[remote]
 #[get("${GATEWAY}/api/patients/{id}")]
 pub async fn get_patient(#[path] id: String) -> Result<Patient, Error> {
     // feignhttp body
@@ -327,5 +327,5 @@ genies_derive = { path = "...", features = ["debug_mode"] }
 - [crates/genies_derive/src/event_type.rs](file:///d:/tdcare/genies/crates/genies_derive/src/event_type.rs) - DomainEvent 实现
 - [crates/genies_derive/src/config_type.rs](file:///d:/tdcare/genies/crates/genies_derive/src/config_type.rs) - Config 实现
 - [crates/genies_derive/src/topic.rs](file:///d:/tdcare/genies/crates/genies_derive/src/topic.rs) - topic 实现
-- [crates/genies_derive/src/wrapper.rs](file:///d:/tdcare/genies/crates/genies_derive/src/wrapper.rs) - wrapper 实现
+- [crates/genies_derive/src/remote.rs](file:///d:/tdcare/genies/crates/genies_derive/src/remote.rs) - remote 实现
 - [crates/genies_derive/src/casbin.rs](file:///d:/tdcare/genies/crates/genies_derive/src/casbin.rs) - casbin 实现

@@ -9,7 +9,7 @@ mod enu;
 mod event_type;
 mod helpers;
 mod topic;
-mod wrapper;
+mod remote;
 
 use proc_macro::TokenStream;
 
@@ -27,7 +27,7 @@ use crate::event_type::{
 use crate::casbin::{impl_casbin};
 use crate::config_core_type::derive_config_core_type_for_struct;
 use crate::config_type::derive_config_type_for_struct;
-use crate::wrapper::impl_wrapper;
+use crate::remote::impl_remote;
 /// 对领域事件进行标记
 #[proc_macro_derive(DomainEvent, attributes(event_type, event_type_version, event_source))]
 pub fn derive_event_type(input: TokenStream) -> TokenStream {
@@ -72,16 +72,16 @@ pub fn topic(args: TokenStream, func: TokenStream) -> TokenStream {
 
 /// 对feignhttp 请求进行包装，自动获取jwt token。当jwt token 失效时，会自动更新
 #[proc_macro_attribute]
-pub fn wrapper(args: TokenStream, func: TokenStream) -> TokenStream {
+pub fn remote(args: TokenStream, func: TokenStream) -> TokenStream {
     let args = parse_macro_input!(args as AttributeArgs);
     let target_fn: ItemFn = syn::parse(func).unwrap();
-    let stream = impl_wrapper(&target_fn, &args);
+    let stream = impl_remote(&target_fn, &args);
     #[cfg(feature = "debug_mode")]
     if cfg!(debug_assertions) {
         use rust_format::{Formatter, RustFmt};
         let code = RustFmt::default().format_str(stream.to_string()).unwrap();
-        println!("............gen macro wrapper :\n {}", code);
-        println!("............gen macro wrapper end............");
+        println!("............gen macro remote :\n {}", code);
+        println!("............gen macro remote end............");
     }
 
     return stream;

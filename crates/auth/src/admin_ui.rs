@@ -88,6 +88,25 @@ fn serve_embedded_file(res: &mut Response, path: &str, data: &[u8]) {
 /// - `/auth/ui/*` - SPA 子路由（fallback 到 index.html）
 pub fn auth_admin_ui_router() -> Router {
     Router::with_path("auth/ui")
-        .get(serve_admin_ui)
+        .get(serve_admin_ui_entry)
         .push(Router::with_path("{**path}").get(serve_admin_ui))
+}
+
+/// 处理 /auth/ui 和 /auth/ui/ 的入口
+/// - 无尾斜杠时重定向到带尾斜杠的路径（确保相对路径资源正确解析）
+/// - 有尾斜杠时直接返回 index.html
+#[handler]
+async fn serve_admin_ui_entry(req: &mut Request, res: &mut Response) {
+    let path = req.uri().path().to_string();
+    if !path.ends_with('/') {
+        res.render(Redirect::other(format!("{}/", path)));
+    } else {
+        // 直接返回 index.html
+        if let Some(index) = AdminUiAssets::get("index.html") {
+            serve_embedded_file(res, "index.html", &index.data);
+        } else {
+            res.status_code(StatusCode::NOT_FOUND);
+            res.render(Text::Plain("404 Not Found"));
+        }
+    }
 }

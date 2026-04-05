@@ -13,7 +13,7 @@ genies_derive provides 7 key macros that simplify common patterns in DDD + Dapr 
 | `#[derive(Config)]` | Derive | Configuration loading from YAML/ENV |
 | `#[derive(ConfigCore)]` | Derive | Internal config (avoids circular deps) |
 | `#[topic(...)]` | Attribute | Dapr topic consumption with Redis idempotency |
-| `#[wrapper(...)]` | Attribute | HTTP request wrapping with JWT auto-refresh |
+| `#[remote(...)]` | Attribute | HTTP request wrapping with JWT auto-refresh |
 | `#[casbin]` | Attribute | Field-level permission control |
 
 ## Quick Start
@@ -209,17 +209,17 @@ If CONSUMED: skip
 If not exists: SET NX (atomic) → process → SET CONSUMED
 ```
 
-### 6. `#[wrapper(...)]` - HTTP Request Wrapper
+### 6. `#[remote(...)]` - HTTP Request Wrapper
 
 Wraps feignhttp requests with automatic JWT token refresh on 401 errors.
 
 **Example:**
 
 ```rust
-use genies_derive::wrapper;
+use genies_derive::remote;
 use feignhttp::get;
 
-#[wrapper]
+#[remote]
 #[get("${GATEWAY}/api/patients/{id}")]
 pub async fn get_patient(#[path] id: String) -> Result<Patient, Error> {
     // feignhttp implementation
@@ -335,7 +335,7 @@ VALUES ('p', 'guest', 'User.phone', 'read', 'deny');
 | `DomainEvent` | `genies_ddd::event` traits |
 | `Config` / `ConfigCore` | `genies_core::error::ConfigError` |
 | `#[topic]` | `genies_dapr`, `genies_context::CONTEXT`, Redis |
-| `#[wrapper]` | `genies_core::jwt`, `genies_context::REMOTE_TOKEN` |
+| `#[remote]` | `genies_core::jwt`, `genies_context::REMOTE_TOKEN` |
 | `#[casbin]` | `genies_auth`, `casbin::Enforcer`, Salvo |
 
 ## Debug Mode

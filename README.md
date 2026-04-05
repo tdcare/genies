@@ -65,7 +65,7 @@
 - **双后端缓存** - 支持 Redis 和内存两种缓存后端，可通过配置切换
 - **JWT 认证中间件** - 内置 Keycloak 集成的 JWT 验证
 - **K8s 健康检查** - 开箱即用的存活/就绪探针
-- **HTTP 包装器** - `#[wrapper]` 宏自动处理跨微服务调用的 Token 刷新
+- **HTTP 包装器** - `#[remote]` 宏自动处理跨微服务调用的 Token 刷新
 
 ---
 
@@ -214,7 +214,7 @@ genies/
 |-------|------|
 | **genies** | 主框架聚合入口，重导出所有子 crate，提供便捷宏 `pool!`、`tx_defer!`、`copy!` |
 | **genies_core** | 核心基础设施：错误处理、JWT 验证、HTTP 响应模型（`RespVO`、`ResultDTO`） |
-| **genies_derive** | 过程宏库：`DomainEvent`、`Aggregate`、`Config`、`topic`、`wrapper`、`casbin` |
+| **genies_derive** | 过程宏库：`DomainEvent`、`Aggregate`、`Config`、`topic`、`remote`、`casbin` |
 | **genies_config** | 配置管理：`ApplicationConfig`、日志配置，支持 YAML + 环境变量 |
 | **genies_context** | 全局上下文（`CONTEXT`）、JWT 认证中间件、服务状态管理 |
 | **genies_cache** | 缓存抽象层：`CacheService` 支持 Redis 和内存双后端 |
@@ -586,15 +586,15 @@ redis_url: "redis://:password@localhost:6379"
 
 ---
 
-### 7. HTTP 包装器 (`#[wrapper]` 宏)
+### 7. HTTP 包装器 (`#[remote]` 宏)
 
 用于包装跨微服务 HTTP 调用，自动处理 Token 刷新：
 
 ```rust
-use genies_derive::wrapper;
+use genies_derive::remote;
 use feignhttp::get;
 
-#[wrapper]
+#[remote]
 #[get("${gateway}/user-service/api/users/{id}")]
 pub async fn get_user_by_id(#[path] id: i64) -> feignhttp::Result<User> {}
 
@@ -604,7 +604,7 @@ async fn example() {
 }
 ```
 
-**`#[wrapper]` 宏功能：**
+**`#[remote]` 宏功能：**
 
 1. 自动从 `REMOTE_TOKEN` 获取访问令牌
 2. 当遇到 401 错误时，自动刷新令牌并重试

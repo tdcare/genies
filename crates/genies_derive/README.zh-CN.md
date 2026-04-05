@@ -13,7 +13,7 @@ genies_derive 提供 7 个核心宏，简化 DDD + Dapr + Casbin 应用中的常
 | `#[derive(Config)]` | 派生宏 | 从 YAML/环境变量加载配置 |
 | `#[derive(ConfigCore)]` | 派生宏 | 内部配置（避免循环依赖） |
 | `#[topic(...)]` | 属性宏 | Dapr topic 消费，支持 Redis 幂等 |
-| `#[wrapper(...)]` | 属性宏 | HTTP 请求包装，支持 JWT 自动刷新 |
+| `#[remote(...)]` | 属性宏 | HTTP 请求包装，支持 JWT 自动刷新 |
 | `#[casbin]` | 属性宏 | 字段级权限控制 |
 
 ## 快速开始
@@ -207,17 +207,17 @@ Dapr 消息 → 解析 CloudEvent → 提取 event_type
 如果不存在: SET NX（原子操作）→ 处理 → SET CONSUMED
 ```
 
-### 6. `#[wrapper(...)]` - HTTP 请求包装
+### 6. `#[remote(...)]` - HTTP 请求包装
 
 包装 feignhttp 请求，在 401 错误时自动刷新 JWT token。
 
 **示例：**
 
 ```rust
-use genies_derive::wrapper;
+use genies_derive::remote;
 use feignhttp::get;
 
-#[wrapper]
+#[remote]
 #[get("${GATEWAY}/api/patients/{id}")]
 pub async fn get_patient(#[path] id: String) -> Result<Patient, Error> {
     // feignhttp 实现
@@ -333,7 +333,7 @@ VALUES ('p', 'guest', 'User.phone', 'read', 'deny');
 | `DomainEvent` | `genies_ddd::event` traits |
 | `Config` / `ConfigCore` | `genies_core::error::ConfigError` |
 | `#[topic]` | `genies_dapr`、`genies_context::CONTEXT`、Redis |
-| `#[wrapper]` | `genies_core::jwt`、`genies_context::REMOTE_TOKEN` |
+| `#[remote]` | `genies_core::jwt`、`genies_context::REMOTE_TOKEN` |
 | `#[casbin]` | `genies_auth`、`casbin::Enforcer`、Salvo |
 
 ## 调试模式

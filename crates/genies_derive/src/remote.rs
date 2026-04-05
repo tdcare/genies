@@ -13,8 +13,8 @@ use syn::{AttributeArgs, ItemFn};
 use crate::helpers::*;
 use crate::proc_macro::TokenStream;
 
-/// impl the wrapper macro
-pub(crate) fn impl_wrapper(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenStream {
+/// impl the remote macro
+pub(crate) fn impl_remote(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenStream {
     let return_ty = find_return_type(target_fn);
     let func_name_ident = target_fn.sig.ident.to_token_stream();
     // let func_name = func_name_ident.to_string();
@@ -54,7 +54,7 @@ pub(crate) fn impl_wrapper(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenSt
     let is_async = target_fn.sig.asyncness.is_some();
     if !is_async {
         panic!(
-            "[genies] #[wrapper] 'fn {}({})' must be  async fn! ",
+            "[genies] #[remote] 'fn {}({})' must be  async fn! ",
             func_name_ident, func_args_stream
         );
     }
@@ -67,7 +67,7 @@ pub(crate) fn impl_wrapper(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenSt
         pub async fn #feignhttp_ident(#[header] Authorization: &str,#func_args_stream) -> #return_ty
             #fn_body
     };
-    // 因为 #[wrapper] 作用于 core-api/remote 中的 feignhttp 函数上
+    // 因为 #[remote] 作用于 core-api/remote 中的 feignhttp 函数上
     // 所以这段代码在编译阶段被展开后，作用于 core-api/remote 目录中函数所在位置的mod 中。
     let wrapper_feignhttp_code = quote! {
         pub async fn #func_name_ident(#func_args) -> #return_ty{
