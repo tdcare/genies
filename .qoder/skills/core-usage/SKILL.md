@@ -249,6 +249,67 @@ let and_condition = ConditionTree {
 | 数组 | `arr_exist_*` | 存在元素满足条件 |
 | 数组 | `arr_each_*` | 所有元素满足条件 |
 
+## Pagination (Spring Data Page Compatibility)
+
+`genies_core::page` 模块提供与 Java Spring Data `Page<T>` 完全兼容的 JSON 分页结构，用于 Java → Rust 微服务迁移时保持分页接口 JSON 格式完全一致。
+
+### Core Types
+
+| 类型 | 说明 |
+|------|------|
+| `SpringPage<T>` | 兼容 Spring Data `Page<T>` 的分页容器 |
+| `Pageable` | 兼容 Spring Data `Pageable` 的分页参数 |
+| `Sort` | 兼容 Spring Data `Sort` 的排序信息 |
+
+### Usage
+
+```rust
+use genies_core::page::SpringPage;
+use rbatis::plugin::page::{Page, PageRequest};
+
+// 从 RBatis Page 转换（不转换记录类型）
+let rbatis_page: Page<MyEntity> = /* 查询结果 */;
+let spring_page: SpringPage<MyEntity> = SpringPage::from(rbatis_page);
+
+// 从 RBatis Page 转换（同时转换 Entity → VO）
+let rbatis_page: Page<MyEntity> = /* 查询结果 */;
+let spring_page: SpringPage<MyVO> = SpringPage::from_rbatis_page(rbatis_page, |e| e.into());
+
+// 配合 ResultDTO 使用
+res.render(Json(ResultDTO::success("查询成功", spring_page)));
+```
+
+### Page Number Conversion
+
+RBatis 页码从 **1** 开始（`page_no = 1` 表示第一页），Spring Data 页码从 **0** 开始（`number = 0` 表示第一页）。`SpringPage::from` 和 `SpringPage::from_rbatis_page` 已自动处理此转换（`number = page_no - 1`），无需手动调整。
+
+### JSON Output
+
+序列化后的 JSON 与 Spring Data `Page<T>` 完全一致：
+
+```json
+{
+  "content": [{"id": 1, "name": "test"}],
+  "pageable": {
+    "pageNumber": 0,
+    "pageSize": 20,
+    "sort": {"empty": true, "sorted": false, "unsorted": true},
+    "offset": 0,
+    "paged": true,
+    "unpaged": false
+  },
+  "last": true,
+  "totalPages": 1,
+  "totalElements": 1,
+  "first": true,
+  "size": 20,
+  "number": 0,
+  "sort": {"empty": true, "sorted": false, "unsorted": true},
+  "numberOfElements": 1,
+  "empty": false
+}
+```
+
 ## Constants
 
 ```rust
@@ -280,3 +341,4 @@ keycloak_credentials_secret: "your-client-secret"
 - [crates/core/src/error.rs](file:///d:/tdcare/genies/crates/core/src/error.rs) - Error 类型定义
 - [crates/core/src/jwt.rs](file:///d:/tdcare/genies/crates/core/src/jwt.rs) - JWT 工具函数
 - [crates/core/src/condition.rs](file:///d:/tdcare/genies/crates/core/src/condition.rs) - 条件表达式求值
+- [crates/core/src/page.rs](file:///d:/tdcare/genies/crates/core/src/page.rs) - Spring Data Page 兼容分页结构

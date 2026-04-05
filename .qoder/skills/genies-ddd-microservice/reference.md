@@ -273,6 +273,23 @@ let page: Page<User> = select_user_page(&rb, &page_req, "test").await?;
 // page.records, page.total, page.page_no, page.page_size
 ```
 
+### SpringPage 转换（Spring Data Page 兼容）
+
+```rust
+use genies_core::page::SpringPage;
+
+// 方式1: 直接转换（不转换记录类型）
+let spring_page: SpringPage<User> = SpringPage::from(rbatis_page);
+
+// 方式2: 转换记录类型（Entity → VO）
+let spring_page: SpringPage<UserVO> = SpringPage::from_rbatis_page(rbatis_page, |e| e.into());
+
+// 配合 ResultDTO 返回
+res.render(Json(ResultDTO::success("查询成功", spring_page)));
+```
+
+> **页码转换**：RBatis `page_no` 从 1 开始，SpringPage 自动转换为 Spring Data 的 `number`（从 0 开始）。
+
 ### 事务
 
 ```rust
@@ -565,6 +582,7 @@ anyhow = "1"
 | 按条件查询 | `Entity::select_by_map(&rb, value!{"col": val}).await` |
 | 动态 SQL | `#[py_sql("...")]` |
 | 分页查询 | `PageRequest::new(page, size)` + `Page<T>` |
+| 分页转换 | `SpringPage::from(rbatis_page)` / `SpringPage::from_rbatis_page(page, \|e\| e.into())` |
 | 事务 | `rb.acquire_begin().await` → `tx.commit().await` |
 | 数据库迁移 | `#[flyway::migrations("migrations")]` |
 | 全局上下文 | `CONTEXT.rbatis` / `CONTEXT.config` / `CONTEXT.cache_service` |

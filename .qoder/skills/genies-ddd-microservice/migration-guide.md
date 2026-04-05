@@ -372,6 +372,12 @@ Java Spring Data 的 `Page<T>` 序列化后包含以下字段：
 
 ### 5.2 Rust 兼容结构体定义
 
+> **注意**：以下结构体已内置在 `genies_core::page` 模块中，无需在每个微服务项目中重复定义。直接引用即可：
+>
+> ```rust
+> use genies_core::page::{SpringPage, Pageable, Sort};
+> ```
+
 ```rust
 use serde::{Deserialize, Serialize};
 
@@ -423,6 +429,8 @@ impl Sort {
 ```
 
 ### 5.3 从 RBatis Page 转换到 SpringPage
+
+> **注意**：`SpringPage` 已内置 `From<rbatis::plugin::page::Page<T>>` 实现和 `from_rbatis_page` 方法，无需手动编写以下转换代码。以下仅展示内部实现原理供参考。
 
 ```rust
 use rbatis::plugin::page::Page as RbatisPage;
@@ -483,6 +491,8 @@ public ResultDTO<Page<DicTypeModel>> pageSearch(
 
 ```rust
 // Rust Handler
+use genies_core::page::SpringPage;
+
 #[handler]
 pub async fn page_search(req: &mut Request, res: &mut Response) {
     // Spring Data 的 page 参数从 0 开始，RBatis 从 1 开始，需要 +1
@@ -497,12 +507,8 @@ pub async fn page_search(req: &mut Request, res: &mut Response) {
         rb, &page_req, &name.unwrap_or_default()
     ).await.unwrap();
 
-    // 转换为 Spring Data 兼容格式
-    let vos: Vec<DicTypeVO> = rbatis_page.records.iter().map(|e| e.clone().into()).collect();
-    let spring_page: SpringPage<DicTypeVO> = SpringPage {
-        content: vos,
-        ..SpringPage::from(rbatis_page)
-    };
+    // 使用内置的 from_rbatis_page 转换为 Spring Data 兼容格式（同时转换 Entity → VO）
+    let spring_page: SpringPage<DicTypeVO> = SpringPage::from_rbatis_page(rbatis_page, |e| e.into());
 
     // 包装在 ResultDTO 中
     res.render(Json(ResultDTO::success("查询成功", spring_page)));

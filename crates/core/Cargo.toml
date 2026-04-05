@@ -35,6 +35,7 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "rus
 
 
 rbdc = { workspace = true}
+rbatis = { workspace = true }
 salvo = {workspace =true}
 
 [dev-dependencies]

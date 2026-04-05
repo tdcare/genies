@@ -375,6 +375,42 @@ pub async fn list_devices(req: &mut Request, depot: &mut Depot, res: &mut Respon
 
 > **关键区别**：Java 中 Controller 返回的所有字段对所有角色可见；Genies 中 `#[casbin]` VO 的字段会根据当前请求者的角色动态隐藏，无需额外代码。
 
+### 6.3 分页查询 Handler（Spring Data Page 兼容）
+
+当需要与 Java 服务保持分页响应格式完全一致时，使用 `SpringPage` 将 RBatis 分页结果转换为 Spring Data `Page<T>` 兼容格式：
+
+```rust
+use salvo::prelude::*;
+use genies::core::ResultDTO;
+use genies::context::CONTEXT;
+use genies_core::page::SpringPage;
+use rbatis::plugin::page::PageRequest;
+
+/// 分页查询 — 返回 Spring Data Page 兼容格式
+#[handler]
+pub async fn page_search_devices(req: &mut Request, res: &mut Response) {
+    // 接收 Spring Data 风格的 page/size 参数（page 从 0 开始）
+    let page: u64 = req.query("page").unwrap_or(0);
+    let size: u64 = req.query("size").unwrap_or(20);
+    let name: Option<String> = req.query("name");
+
+    let rb = &CONTEXT.rbatis;
+    // 转换为 RBatis PageRequest（page_no 从 1 开始，即 page + 1）
+    let page_req = PageRequest::new(page + 1, size);
+
+    // 执行分页查询
+    let rbatis_page = DeviceEntity::select_page(
+        rb, &page_req, &name.unwrap_or_default()
+    ).await.unwrap();
+
+    // 转换为 SpringPage（同时将 Entity 转为 VO）
+    let spring_page: SpringPage<DeviceVO> = SpringPage::from_rbatis_page(rbatis_page, |e| e.into());
+
+    // 用 ResultDTO 包装返回
+    res.render(Json(ResultDTO::success("查询成功", spring_page)));
+}
+```
+
 ### 6.2 路由配置
 
 ```rust
