@@ -357,32 +357,95 @@ cache_type: "redis"  # 或 "mem"
 redis_url: "redis://:password@localhost:6379"
 ```
 
-## 11. HTTP 包装器
+## 11. 远程服务调用 (`#[remote]`)
 
-使用 `#[remote]` 宏包装跨微服务 HTTP 调用：
+使用 `#[remote]` 宏实现声明式跨微服务 HTTP 调用（类似 Java `@FeignClient`），自动管理 Keycloak Token。
+
+### 11.1 目录结构
+
+remote 模块**独立于 DDD 四层架构**，按外部服务分文件：
+
+```
+src/remote/
+├── mod.rs                  # 模块导出
+├── patient_service.rs      # 患者服务远程调用
+├── baseinfo_service.rs     # 基础信息服务远程调用
+└── his_service.rs          # HIS 系统远程调用
+```
+
+在 `lib.rs` 中声明 `pub mod remote;`。
+
+### 11.2 定义服务基础 URL
+
+使用 `config_gateway!` 宏从 application.yml 的 gateway 配置读取服务基础路径：
+
+```rust
+use once_cell::sync::Lazy;
+
+pub static BaseInfo: Lazy<String> = genies::config_gateway!("/baseinfo");
+pub static Patient: Lazy<String> = genies::config_gateway!("/patient");
+```
+
+### 11.3 声明远程调用函数
 
 ```rust
 use genies_derive::remote;
-use feignhttp::get;
+use serde::{Deserialize, Serialize};
 
-#[remote]
-#[get("${gateway}/user-service/api/users/{id}")]
-pub async fn get_user_by_id(#[path] id: i64) -> feignhttp::Result<User> {}
-
-// 使用时无需手动传递 Authorization header
-async fn example() {
-    let user = get_user_by_id(123).await.unwrap();
+/// 远程调用返回的数据模型
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomConfigModel {
+    pub id: Option<String>,
+    pub name: Option<String>,
 }
+
+/// 查询参数示例
+#[remote]
+#[get(url = BaseInfo, path = "/customconfig/depttypename")]
+pub async fn findByDepartmentIdAndTypeName(
+    #[query] departmentId: &str,
+    #[query] typeName: &str,
+) -> feignhttp::Result<Vec<CustomConfigModel>> { impled!() }
+
+/// 路径参数示例
+#[remote]
+#[get(url = Patient, path = "/api/patient/id/{id}")]
+pub async fn get_patient_by_id(
+    #[path] id: &str,
+) -> feignhttp::Result<PatientInfo> { impled!() }
+
+/// POST 请求体示例
+#[remote]
+#[post(url = Patient, path = "/api/patient/create")]
+pub async fn create_patient(
+    #[body] patient: PatientCreateDTO,
+) -> feignhttp::Result<String> { impled!() }
 ```
 
-**功能：**
-- 自动从 `REMOTE_TOKEN` 获取访问令牌
-- 遇到 401 时自动刷新令牌并重试
+### 11.4 参数注解
 
-**配置 gateway（使用 `config_gateway!` 宏）：**
+| 注解 | 说明 | 示例 |
+|------|------|------|
+| `#[query]` | 查询参数（?key=value） | `#[query] name: &str` |
+| `#[path]` | 路径参数（/api/{id}） | `#[path] id: &str` |
+| `#[body]` | 请求体（JSON） | `#[body] body: UserDTO` |
+
+### 11.5 关键规则
+
+- **`url` + `path` 分离**：`url` 引用 `Lazy<String>` 静态变量，`path` 是具体端点路径
+- **函数体**：必须写 `impled!()`（feignhttp 宏要求）
+- **参数类型**：用 `&str` 而非 `String`
+- **自动 Token 管理**：`#[remote]` 自动从 `REMOTE_TOKEN` 获取 Bearer token，遇 401 自动刷新 Keycloak token 并重试
+- **生成两个函数**：`{func_name}_feignhttp`（带 Authorization 参数的原始版本）和 `{func_name}`（自动注入 token 的包装版本）
+
+### 11.6 调用示例
+
 ```rust
-lazy_static! {
-    pub static ref GATEWAY: String = config_gateway!("/user");
+// 使用时无需手动传递 Authorization header
+async fn example() {
+    let patient = get_patient_by_id("123").await.unwrap();
+    let configs = findByDepartmentIdAndTypeName("dept1", "type1").await.unwrap();
 }
 ```
 

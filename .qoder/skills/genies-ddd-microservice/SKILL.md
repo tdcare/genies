@@ -82,15 +82,21 @@ crates/my_service/
 │   │   │   ├── device_handler.rs
 │   │   │   └── blood_bag_handler.rs
 │   │   └── router.rs                   # 路由配置（汇总所有 handler 的路由）
-│   └── infrastructure/                 # 基础设施层
-│       ├── mod.rs
-│       └── migration.rs                # Flyway 迁移配置
+│   ├── infrastructure/                 # 基础设施层
+│   │   ├── mod.rs
+│   │   └── migration.rs                # Flyway 迁移配置
+│   └── remote/                         # 远程服务调用层（独立于 DDD 四层）
+│       ├── mod.rs                      # 模块导出
+│       ├── patient_service.rs          # 患者服务远程调用
+│       ├── baseinfo_service.rs         # 基础信息服务远程调用
+│       └── his_service.rs              # HIS 系统远程调用
 ```
 
 **目录划分原则：**
 - `domain/` 下按职责（aggregate、event、service 等）分子目录，每个子目录内按业务实体分文件
 - 简单服务（仅 1-2 个聚合根）可将子目录退化为单文件（如 `aggregate.rs` 代替 `aggregate/`）
-- `command/` 目录仅在有复杂命令模式时创建（参见第 11.1 节）
+- `command/` 目录仅在有复杂命令模式时创建（参见第 12.1 节）
+- `remote/` 目录**独立于 DDD 四层架构**，用于跨微服务 HTTP 远程调用，不同的外部服务接口用不同文件表示
 
 ## 4. 领域层 (Domain Layer)
 
@@ -595,7 +601,86 @@ CREATE TABLE IF NOT EXISTS message (
 
 SQL 注解语法：`--! may_fail: true`（`--!` 前缀 + YAML 格式）
 
-## 8. 微服务启动入口
+## 8. 远程服务调用层 (Remote Layer)
+
+远程调用模块**独立于 DDD 四层架构**，用于跨微服务的 HTTP 远程调用（类似 Java 的 FeignClient）。使用 `#[remote]` 属性宏实现声明式 HTTP 调用，自动管理 Keycloak Token。
+
+### 8.1 目录结构
+
+```
+src/remote/
+├── mod.rs                  # 模块导出
+├── patient_service.rs      # 患者服务远程调用
+├── baseinfo_service.rs     # 基础信息服务远程调用
+└── his_service.rs          # HIS 系统远程调用
+```
+
+在 `lib.rs` 中声明 `pub mod remote;`。
+
+### 8.2 基本用法
+
+```rust
+use once_cell::sync::Lazy;
+use genies_derive::remote;
+use serde::{Deserialize, Serialize};
+
+/// 使用 config_gateway! 宏定义外部服务的基础 URL（从 application.yml 的 gateway 配置读取）
+pub static BaseInfo: Lazy<String> = genies::config_gateway!("/baseinfo");
+pub static Patient: Lazy<String> = genies::config_gateway!("/patient");
+
+/// 远程调用返回的数据模型
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomConfigModel {
+    pub id: Option<String>,
+    pub name: Option<String>,
+}
+
+/// 查询参数示例
+#[remote]
+#[get(url = BaseInfo, path = "/customconfig/depttypename")]
+pub async fn findByDepartmentIdAndTypeName(
+    #[query] departmentId: &str,
+    #[query] typeName: &str,
+) -> feignhttp::Result<Vec<CustomConfigModel>> { impled!() }
+
+/// 路径参数示例
+#[remote]
+#[get(url = Patient, path = "/api/patient/id/{id}")]
+pub async fn get_patient_by_id(
+    #[path] id: &str,
+) -> feignhttp::Result<PatientInfo> { impled!() }
+
+/// POST 请求体示例
+#[remote]
+#[post(url = Patient, path = "/api/patient/create")]
+pub async fn create_patient(
+    #[body] patient: PatientCreateDTO,
+) -> feignhttp::Result<String> { impled!() }
+```
+
+### 8.3 关键要点
+
+- **`config_gateway!` 宏**：`genies::config_gateway!("/service-prefix")` 生成 `Lazy<String>`，值为 `${gateway}/service-prefix`，gateway 从 application.yml 配置读取
+- **`url` + `path` 分离**：`url` 引用 `Lazy<String>` 静态变量（服务基础路径），`path` 是具体端点路径
+- **参数注解**：`#[query]` 查询参数、`#[path]` 路径参数、`#[body]` 请求体
+- **函数体**：必须写 `impled!()`（feignhttp 宏要求）
+- **参数类型**：用 `&str` 而非 `String`
+- **自动 Token 管理**：`#[remote]` 自动从 `REMOTE_TOKEN` 获取 Bearer token，遇 401 自动刷新 Keycloak token 并重试
+- **生成两个函数**：`{func_name}_feignhttp`（带 Authorization 参数的原始版本）和 `{func_name}`（自动注入 token 的包装版本）
+
+### 8.4 与 Java FeignClient 的对照
+
+| Java FeignClient | Rust/Genies `#[remote]` |
+|------------------|------------------------|
+| `@FeignClient(name = "patient-service")` | `pub static Patient: Lazy<String> = genies::config_gateway!("/patient");` |
+| `@GetMapping("/api/patient/{id}")` | `#[get(url = Patient, path = "/api/patient/{id}")]` |
+| `@RequestParam String name` | `#[query] name: &str` |
+| `@PathVariable String id` | `#[path] id: &str` |
+| `@RequestBody UserDTO body` | `#[body] body: UserDTO` |
+| Spring Security OAuth2 Token 自动传递 | `#[remote]` 自动管理 Keycloak Token（401 自动刷新重试） |
+
+## 9. 微服务启动入口
 
 ```rust
 use salvo::prelude::*;
@@ -629,7 +714,7 @@ async fn main() {
 }
 ```
 
-## 9. Cargo.toml 模板
+## 10. Cargo.toml 模板
 
 ```toml
 [package]
@@ -660,7 +745,7 @@ log = "0.4"
 anyhow = "1.0"
 ```
 
-## 10. Java DDD → Rust/Genies 完整对照表
+## 11. Java DDD → Rust/Genies 完整对照表
 
 | Java 模式 | Rust/Genies 实现 |
 |----------|-----------------|
@@ -686,14 +771,15 @@ anyhow = "1.0"
 | `Keycloak SSO` | `genies_auth` Casbin 中间件 |
 | `BeanUtils.copyProperties(src, dest)` | `copy!(&src, DestType)` 宏（基于 serde 序列化） |
 | `@ApiModelProperty` | `#[derive(ToSchema)]` (Salvo OpenAPI) |
+| `@FeignClient` + `@GetMapping/@PostMapping` | `#[remote]` + `#[get(url=..., path=...)]` 声明式远程调用 |
 | **Java 无对应** | `#[casbin]` 响应 DTO 字段级动态权限过滤 |
 | **Java 无对应** | `casbin_auth()` 中间件 API 级访问控制 |
 
-## 11. 进阶 DDD 模式
+## 12. 进阶 DDD 模式
 
 以下模式来自复杂业务领域（如医嘱管理），适用于聚合根数量多、业务规则复杂、跨服务交互频繁的场景。
 
-### 11.1 命令模式 (Command Pattern)
+### 12.1 命令模式 (Command Pattern)
 
 复杂业务操作应封装为独立的命令对象，而非直接传递 Model：
 
@@ -733,7 +819,7 @@ impl BloodBag {
 }
 ```
 
-### 11.2 多类型聚合根加载器
+### 12.2 多类型聚合根加载器
 
 当一个领域有多种聚合根子类型时（如药物医嘱、检查医嘱、手术医嘱），使用统一加载器：
 
@@ -770,7 +856,7 @@ impl DoctorAdviceAggregateLoader {
 }
 ```
 
-### 11.3 事件分层体系
+### 12.3 事件分层体系
 
 复杂领域应建立事件继承层次，便于消费者按粒度订阅：
 
@@ -803,7 +889,7 @@ pub struct WorkItemSagaStartedEvent {
 }
 ```
 
-### 11.4 跨聚合根事件消费
+### 12.4 跨聚合根事件消费
 
 一个消费者可以监听来自多个不同聚合根的事件（对应 Java 中 `andForAggregateType` 模式）：
 
@@ -833,7 +919,7 @@ pub async fn on_blood_bag_audited(
 }
 ```
 
-### 11.5 域服务编排模式
+### 12.5 域服务编排模式
 
 复杂业务领域的域服务应按层次组织，主服务聚合子服务：
 
@@ -870,7 +956,7 @@ impl DrugAdviceDomainService {
 }
 ```
 
-### 11.6 聚合根生成多事件
+### 12.6 聚合根生成多事件
 
 复杂业务操作可能需要在一次聚合根方法调用中生成多个事件：
 
@@ -907,7 +993,7 @@ pub async fn publish_multiple(
 }
 ```
 
-### 11.7 查询仓储与聚合仓储分离
+### 12.7 查询仓储与聚合仓储分离
 
 对应 Java 中 QueryRepository 和 AggregateRepository 的分离模式：
 
@@ -936,7 +1022,7 @@ impl DrugAdviceEntity {
 /// 聚合仓储方法用于业务操作前的聚合根加载
 ```
 
-## 12. 最佳实践
+## 13. 最佳实践
 
 - **聚合根**应包含业务规则验证，工厂方法返回 `(Entity, Event)` 元组
 - **域服务**处理跨实体逻辑，不直接暴露给接口层
@@ -952,7 +1038,7 @@ impl DrugAdviceEntity {
 - 参考现有 `crates/auth/` 作为完整业务模块示范
 - SQL 迁移文件使用 `V<N>__<desc>.sql` 双下划线命名
 
-## 13. Related Skills
+## 14. Related Skills
 
 - **ddd-usage** — DDD 核心 API（聚合根、领域事件、事件发布）
 - **derive-usage** — 过程宏详解（Aggregate、DomainEvent、topic、casbin 等）

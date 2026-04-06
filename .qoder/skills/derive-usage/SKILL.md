@@ -222,37 +222,115 @@ SET NX (原子) → 处理 → SET CONSUMED
 
 ## Macro 6: #[remote]
 
-feignhttp 请求包装，401 时自动刷新 JWT。
+feignhttp 请求包装，自动管理 Keycloak JWT Token（401 时自动刷新并重试）。类似 Java 的 `@FeignClient`。
 
-### Example
+### 目录结构
+
+remote 模块**独立于 DDD 四层架构**，按外部服务分文件：
+
+```
+src/remote/
+├── mod.rs                  # 模块导出
+├── patient_service.rs      # 患者服务远程调用
+├── baseinfo_service.rs     # 基础信息服务远程调用
+└── his_service.rs          # HIS 系统远程调用
+```
+
+在 `lib.rs` 中声明 `pub mod remote;`。
+
+### 基本语法
 
 ```rust
+use once_cell::sync::Lazy;
 use genies_derive::remote;
-use feignhttp::get;
+use serde::{Deserialize, Serialize};
 
-#[remote]
-#[get("${GATEWAY}/api/patients/{id}")]
-pub async fn get_patient(#[path] id: String) -> Result<Patient, Error> {
-    // feignhttp body
+/// 使用 config_gateway! 宏定义外部服务的基础 URL
+pub static BaseInfo: Lazy<String> = genies::config_gateway!("/baseinfo");
+pub static Patient: Lazy<String> = genies::config_gateway!("/patient");
+
+/// 远程调用返回的数据模型
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct CustomConfigModel {
+    pub id: Option<String>,
+    pub name: Option<String>,
 }
 ```
+
+### 参数注解
+
+| 注解 | 说明 | 示例 |
+|------|------|------|
+| `#[query]` | 查询参数（?key=value） | `#[query] name: &str` |
+| `#[path]` | 路径参数（/api/{id}） | `#[path] id: &str` |
+| `#[body]` | 请求体（JSON） | `#[body] body: UserDTO` |
+
+### GET 查询参数示例
+
+```rust
+#[remote]
+#[get(url = BaseInfo, path = "/customconfig/depttypename")]
+pub async fn findByDepartmentIdAndTypeName(
+    #[query] departmentId: &str,
+    #[query] typeName: &str,
+) -> feignhttp::Result<Vec<CustomConfigModel>> { impled!() }
+```
+
+### GET 路径参数示例
+
+```rust
+#[remote]
+#[get(url = Patient, path = "/api/patient/id/{id}")]
+pub async fn get_patient_by_id(
+    #[path] id: &str,
+) -> feignhttp::Result<PatientInfo> { impled!() }
+```
+
+### POST 请求体示例
+
+```rust
+#[remote]
+#[post(url = Patient, path = "/api/patient/create")]
+pub async fn create_patient(
+    #[body] patient: PatientCreateDTO,
+) -> feignhttp::Result<String> { impled!() }
+```
+
+### 关键要点
+
+- **`config_gateway!` 宏**：`genies::config_gateway!("/service-prefix")` 生成 `Lazy<String>`，值为 `${gateway}/service-prefix`，gateway 从 application.yml 配置读取
+- **`url` + `path` 分离**：`url` 引用 `Lazy<String>` 静态变量（服务基础路径），`path` 是具体端点路径
+- **函数体**：必须写 `impled!()`（feignhttp 宏要求）
+- **参数类型**：用 `&str` 而非 `String`
 
 ### Generated
 
 ```rust
-// 原函数 + Authorization header
-pub async fn get_patient_feignhttp(
+// 原函数重命名为 _feignhttp 后缀，增加 Authorization header 参数
+pub async fn get_patient_by_id_feignhttp(
     #[header] Authorization: &str,
-    #[path] id: String
-) -> Result<Patient, Error>
+    #[path] id: &str,
+) -> feignhttp::Result<PatientInfo>
 
 // 包装函数（自动 token 管理）
-pub async fn get_patient(id: String) -> Result<Patient, Error> {
-    // 1. 使用 REMOTE_TOKEN 发起请求
-    // 2. 如果 401，从 Keycloak 刷新 token
-    // 3. 重试请求
+pub async fn get_patient_by_id(id: &str) -> feignhttp::Result<PatientInfo> {
+    // 1. 从 REMOTE_TOKEN 获取 Bearer token
+    // 2. 调用 get_patient_by_id_feignhttp
+    // 3. 如果 401，从 Keycloak 刷新 token 并重试
 }
 ```
+
+### 与 Java FeignClient 的对照
+
+| Java FeignClient | Rust/Genies `#[remote]` |
+|------------------|------------------------|
+| `@FeignClient(name = "patient-service")` | `pub static Patient: Lazy<String> = genies::config_gateway!("/patient");` |
+| `@GetMapping("/api/patient/{id}")` | `#[get(url = Patient, path = "/api/patient/{id}")]` |
+| `@RequestParam String name` | `#[query] name: &str` |
+| `@PathVariable String id` | `#[path] id: &str` |
+| `@RequestBody UserDTO body` | `#[body] body: UserDTO` |
+| Spring Security OAuth2 Token | `#[remote]` 自动管理 Keycloak Token |
 
 ## Macro 7: #[casbin]
 
