@@ -589,7 +589,7 @@ crates/my_service/migrations/
 └── V3__seed_data.sql          ← 完全相同的 SQL
 ```
 
-> **注意**：由于共用同一个数据库，Rust 的 flyway-rs 检测到这些版本已经执行过，会自动跳过。不会重复执行。
+> **注意**：Java 和 Rust 使用不同的迁移历史表（Java 用 `flyway_schema_history`，Rust 用 `flyway_migrations`），因此 Rust 的 flyway-rs 会独立执行这些迁移。由于 DDL 语句通常使用 `CREATE TABLE IF NOT EXISTS` 等幂等写法，实际执行时已存在的对象不会重复创建。对于 MySQL 不支持 `IF NOT EXISTS` 的语句（如 `CREATE INDEX`），应使用 `--! may_fail: true` 注解容错。
 
 #### 6.1.2 迁移模块配置
 
@@ -1297,7 +1297,29 @@ lazy_static! {
 - 测试工具：Rust + reqwest + rbatis + serde_json + tokio（标准 `#[cfg(test)]` 测试框架）
 - 测试脚本需要直接连接 MySQL（通过 RBatis）来读取表数据做快照和还原
 
-### 7.2 查询接口对比测试
+### 7.2 测试文件按接口领域划分
+
+测试代码必须按接口所属的业务领域（聚合根/模块）拆分为独立的测试文件，禁止将所有测试写在同一个文件中。
+
+##### 文件组织规范
+
+```
+tests/
+├── common/
+│   └── mod.rs              # 共享测试基础设施（配置、HTTP客户端、DB Diff工具函数等）
+├── sickbed_comparison_tests.rs   # Sickbed 领域的对比测试
+├── ward_comparison_tests.rs      # Ward 领域的对比测试
+└── ...                           # 每个业务领域一个文件
+```
+
+##### 拆分原则
+
+1. **一个聚合根/业务模块对应一个测试文件** — 如 Sickbed 和 Ward 是两个不同的业务领域，各自独立文件
+2. **共享基础设施提取到 `tests/common/mod.rs`** — 包括配置函数、HTTP 客户端初始化、`deep_diff`、`db_snapshot`/`db_diff`/`db_restore`、`test_mutation_with_db_diff` 等工具函数，所有项标记为 `pub`
+3. **每个测试文件通过 `mod common;` 引用共享模块**
+4. **文件命名规范**：`{领域名}_comparison_tests.rs`，如 `sickbed_comparison_tests.rs`、`ward_comparison_tests.rs`
+
+### 7.3 查询接口对比测试
 
 对每个查询接口（GET 或查询类 POST）：
 
@@ -1312,15 +1334,15 @@ lazy_static! {
 
 > **为什么先 Java 后 Rust？** 因为 Java 是已上线的正确实现，作为基准；Rust 是待验证的新实现。
 
-### 7.3 业务提交接口测试（基于数据库变更对比）
+### 7.4 业务提交接口测试（基于数据库变更对比）
 
 业务提交接口（create / update / delete）的测试**不对比 HTTP 响应**，而是对比 **Java 和 Rust 对数据库造成的变更是否一致**。
 
-#### 7.3.1 核心思路
+#### 7.4.1 核心思路
 
 同一个提交操作，Java 执行一次、Rust 执行一次，两次执行对数据库产生的变更（INSERT / UPDATE / DELETE）应该完全一致。
 
-#### 7.3.2 测试流程（7 步）
+#### 7.4.2 测试流程（7 步）
 
 ```
 ┌───────────────────────────────────────────────────────────────────┐
@@ -1352,7 +1374,7 @@ lazy_static! {
 └───────────────────────────────────────────────────────────────────┘
 ```
 
-#### 7.3.3 接口-表变更矩阵
+#### 7.4.3 接口-表变更矩阵
 
 迁移每个接口前，先分析 Java 代码确定影响范围，填写以下矩阵：
 
@@ -1365,7 +1387,7 @@ lazy_static! {
 
 > 一个接口可能影响多张表（如绑定操作同时更新设备状态和插入绑定日志），需逐一列出。
 
-#### 7.3.4 DB 变更捕获方式
+#### 7.4.4 DB 变更捕获方式
 
 通过**快照对比**（snapshot diff）捕获数据库变更：
 
@@ -1388,7 +1410,65 @@ lazy_static! {
 
 > **注意**：快照使用主键（通常是 `id` 列）来匹配记录。WHERE 条件传空字符串表示无条件查询（不推荐用于大表）。
 
-#### 7.3.5 DB 还原方式
+#### 7.4.5 领域事件（Outbox 模式）与多表操作规则
+
+业务提交接口可能同时修改多个数据库表，测试时**每个受影响的表都必须包含在 `AffectedTable` 列表中**。
+
+##### 规则一：领域事件 → message 表必须验证
+
+如果业务代码通过 `publish()` 发布了领域事件（Outbox 模式会将事件写入 `message` 表），`AffectedTable` **必须**包含 `message` 表：
+
+```rust
+AffectedTable {
+    table: "message",
+    pk_field: "id",
+    order_by: "creation_time",
+    where_clause: "destination LIKE '%具体事件类型名%'".to_string(),
+}
+```
+
+`message` 表的 `ignore_fields` 必须包含以下动态字段（Java 和 Rust 生成的值不同属于正常行为）：
+- `id` — 主键由不同框架生成
+- `creation_time` — 时间戳不同
+- `headers` — 可能包含框架特有的元信息
+- `published` — 发布状态可能有时序差异
+
+但 `destination`（事件目标主题）和 `payload`（事件体 JSON）**必须一致**，这是验证业务正确性的核心。
+
+##### 规则二：多表修改 → 逐表验证
+
+若业务操作同时修改了多个表（如新增床位同时更新病房计数），每个被修改的表都必须列出：
+
+```rust
+// 示例：新增床位 → 同时影响 SickbedEntity 和 WardEntity
+&[
+    AffectedTable {
+        table: "SickbedEntity",
+        pk_field: "id",
+        order_by: "id",
+        where_clause: format!("id = '{}'", new_sickbed_id),
+    },
+    AffectedTable {
+        table: "WardEntity",
+        pk_field: "id",
+        order_by: "id",
+        where_clause: format!("id = '{}'", ward_id),
+    },
+],
+```
+
+##### 规则三：接口-表变更矩阵必须完整
+
+编写测试前，先分析 Java 源码确定接口涉及的所有表操作，形成完整的"接口-表变更矩阵"。典型场景：
+
+| 场景 | 额外涉及的表 |
+|------|-------------|
+| 发布领域事件（`publish`/`DomainEventPublisher`） | `message` 表（INSERT） |
+| 新增子实体时更新父实体计数 | 父实体表（UPDATE） |
+| 级联删除 | 关联子实体表（DELETE） |
+| 批量操作内部调用单条操作 | 与单条操作相同的表集合 |
+
+#### 7.4.6 DB 还原方式
 
 Java 提交后需要还原数据库，再让 Rust 在相同初始状态下提交。还原策略：
 
@@ -1413,7 +1493,7 @@ ROLLBACK
 
 > **方式 B 的限制**：需要测试脚本能控制数据库事务，而 Java 接口内部通常自己管理事务，外部 ROLLBACK 不一定能回滚 Java 已提交的事务。因此**推荐使用方式 A**。
 
-### 7.4 Cargo.toml 依赖配置
+### 7.5 Cargo.toml 依赖配置
 
 在项目的 `Cargo.toml` 中添加以下 `dev-dependencies`：
 
@@ -1427,7 +1507,7 @@ serde = { version = "1", features = ["derive"] }
 
 > **说明**：数据库快照和还原使用项目已有的 `rbatis` 依赖（在 `[dependencies]` 中），无需额外引入 sqlx。测试代码通过 `RBatis` 直接连接 MySQL 执行原生 SQL。
 
-### 7.5 完整 Rust 测试代码
+### 7.6 完整 Rust 测试代码
 
 将以下内容保存为 `tests/api_compare_test.rs`（集成测试）或放在业务 crate 的 `#[cfg(test)]` 模块中：
 
@@ -2475,12 +2555,11 @@ let page_index: u64 = req.query("pageIndex").unwrap_or(0);
 
 ### 8.9 `#[casbin]` 字段过滤对兼容性的影响
 
-**问题**：`#[casbin]` 会根据权限策略动态隐藏某些字段，导致 Rust 响应比 Java 少字段。
-
-**解决**：迁移初期先不加 `#[casbin]`，等查询接口对比测试全部通过后再启用。
+`#[casbin]` 采用**默认全部放行**（allow-all）策略：未配置 deny 规则前，不会过滤任何字段，接口响应与不加 `#[casbin]` 完全一致。因此迁移时可以直接加上 `#[casbin]`，无需分阶段。
 
 ```rust
-// 迁移第一阶段 — 先不加 #[casbin]，确保接口兼容
+// 迁移时直接加上 #[casbin]，默认不影响任何字段
+#[casbin]
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DeviceVO {
@@ -2488,13 +2567,9 @@ pub struct DeviceVO {
     pub serial_number: String,
     pub department_id: String,
 }
-
-// 迁移第二阶段 — 兼容性测试通过后，再加 #[casbin]
-// #[casbin]
-// #[derive(Debug, Serialize, Deserialize, ToSchema)]
-// #[serde(rename_all = "camelCase")]
-// pub struct DeviceVO { ... }
 ```
+
+> **说明**：只有在 Casbin 后台显式配置了某个角色对某个字段的 deny 规则后，该字段才会被过滤。迁移期间无需额外处理权限策略。
 
 ---
 
