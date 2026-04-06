@@ -24,9 +24,12 @@ genies_context 是 Genies 框架的应用上下文管理库，提供全局上下
 ```
 应用启动 → CONTEXT (lazy_static) → init_database() → 就绪
                 │
-                ├── ApplicationConfig (./application.yml)
-                ├── Keycloak Keys (异步获取)
-                ├── CacheService (Redis)
+                ├── ApplicationContext::new()
+                │       ├── ApplicationConfig (./application.yml)
+                │       ├── Keycloak Keys (异步获取)
+                │       ├── CacheService (Redis)
+                │       └── Snowflake ID 生成器 (worker_id 解析)
+                │
                 └── RBatis (根据 URL scheme 自动选择驱动)
 ```
 
@@ -285,3 +288,35 @@ use genies::context::SERVICE_STATUS;
 - [crates/context/src/auth.rs](file:///d:/tdcare/genies/crates/context/src/auth.rs) - 认证中间件和辅助函数
 - [crates/config/src/app_config.rs](file:///d:/tdcare/genies/crates/config/src/app_config.rs) - ApplicationConfig 定义
 - [crates/cache/src/cache_service.rs](file:///d:/tdcare/genies/crates/cache/src/cache_service.rs) - CacheService 实现
+
+## Snowflake Worker ID Resolution
+
+`ApplicationContext::new()` automatically initializes the Snowflake ID generator by resolving a unique `worker_id`.
+
+### Resolution Priority
+
+1. **Redis Slot Registration** (when `cache_type = "redis"`):
+   - Iterates slots 0..1023, uses `SETNX snowflake:slot:{server_name}:{i}` with 1-hour TTL
+   - First successful slot becomes the worker_id
+   - Background thread renews TTL every 30 minutes using `CONTEXT.cache_service`
+   - Handles both in-runtime and standalone contexts via `Handle::try_current()`
+
+2. **K8s HOSTNAME**: Extracts numeric suffix from `HOSTNAME` env var (e.g., `pod-name-3` → 3), modulo 1024
+
+3. **Config File**: Uses `machine_id` from `application.yml` if set
+
+4. **Fallback**: Defaults to 1
+
+### Configuration
+
+```yaml
+# application.yml
+machine_id: 1   # Optional, only needed if Redis and K8s are unavailable
+```
+
+### After Initialization
+
+Business code can generate IDs via:
+```rust
+let id = genies::next_id();
+```

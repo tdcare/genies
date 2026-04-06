@@ -152,6 +152,30 @@ let matches = obj_test(&obj, &condition);
 | 字符串 | `contain`, `!contain` |
 | 数组 | `arr_size_*`, `arr_exist_*`, `arr_each_*` |
 
+### ID 生成模块
+
+基于 `rs-snowflake` 的全局唯一雪花 ID 生成器，生成 64 位分布式 ID（String 类型），适用于数据库 VARCHAR 主键。
+
+#### API
+
+| 函数 | 签名 | 说明 |
+|------|------|------|
+| `init` | `fn init(machine_id: i32, datacenter_id: i32)` | 初始化生成器（启动时由 `ApplicationContext` 调用一次） |
+| `next_id` | `fn next_id() -> String` | 生成全局唯一 ID |
+
+#### 用法
+
+```rust
+// 在业务代码中（通过 genies 重导出）
+let id = genies::next_id();
+
+// 在核心库中（直接访问）
+let id = genies_core::id_gen::next_id();
+```
+
+> **注意**：生成器在 `ApplicationContext::new()` 期间自动初始化。
+> 除非有特殊原因，请勿手动调用 `init()`。
+
 ## 快速开始
 
 ### 1. 添加依赖
@@ -199,6 +223,19 @@ async fn verify_request(token: &str) -> Result<JWTToken, Error> {
     
     JWTToken::verify_with_keycloak(&keys, token)
 }
+```
+
+### 4. ID 生成
+
+```rust
+use genies_core::id_gen;
+
+// 初始化（通常由 ApplicationContext 自动完成）
+id_gen::init(1, 1);
+
+// 生成唯一 ID
+let order_id = id_gen::next_id();    // 例如 "7446616570199150889"
+let event_id = id_gen::next_id();    // 例如 "7446616570199150890"
 ```
 
 ## RespVO 与 ResultDTO 选择指南

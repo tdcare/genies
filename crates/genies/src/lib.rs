@@ -26,6 +26,9 @@ pub use genies_dapr as dapr;
 pub use genies_ddd as ddd ;
 pub use genies_k8s as k8s ;
 
+/// 生成全局唯一雪花 ID
+pub use genies_core::id_gen::next_id;
+
 // 重新导出 topic 路由自动收集函数，方便用户直接使用
 pub use genies_dapr::{
     collect_topic_routers, 

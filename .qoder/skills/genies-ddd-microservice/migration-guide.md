@@ -101,7 +101,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4"] }      # 可移除，已由 genies::next_id() 替代
 log = "0.4"
 anyhow = "1.0"
 ```
@@ -611,6 +611,48 @@ pub async fn run_migrations() {
 }
 ```
 
+#### 6.1.3 ID 生成：UUID → Snowflake
+
+Java 项目中常用 `UUID.randomUUID().toString()` 生成主键 ID，迁移到 Rust 后统一使用 Genies 内置的雪花 ID 生成器替代。
+
+**Java 原代码：**
+
+```java
+import java.util.UUID;
+
+String id = UUID.randomUUID().toString();
+entity.setId(id);
+```
+
+**Rust 迁移后：**
+
+```rust
+// 业务代码中直接调用（推荐）
+let id = genies::next_id();
+entity.id = Some(id);
+
+// 在核心库内部（无法依赖 genies crate 时）
+let id = genies_core::id_gen::next_id();
+```
+
+**迁移要点：**
+
+| 对比项 | Java UUID | Rust Snowflake |
+|--------|-----------|----------------|
+| 生成方式 | `UUID.randomUUID().toString()` | `genies::next_id()` |
+| ID 格式 | 36 字符（含 `-`），如 `550e8400-e29b-41d4-a716-446655440000` | 纯数字字符串，如 `7446616570199150889` |
+| 存储类型 | VARCHAR(36) | VARCHAR(20) 即可 |
+| 排序性 | 无序 | 趋势递增（按时间） |
+| 唯一性保证 | 随机碰撞概率极低 | 分布式唯一（worker_id + 时间戳 + 序列号） |
+| 依赖配置 | 无 | 自动（Redis 槽位 → K8s HOSTNAME → 配置 → 兜底） |
+| Cargo 依赖 | 不需要添加 uuid crate | 已内置于 genies 框架，无需额外依赖 |
+
+> **注意事项：**
+> - 雪花 ID 是 **64 位整数**，以 `String` 形式返回，避免 JavaScript 精度丢失
+> - 如果 Java 和 Rust 服务**共享同一数据库**，需确保两端生成的 ID 不冲突：Java 使用 UUID（36 字符），Rust 使用雪花 ID（纯数字），格式天然不同，不会冲突
+> - 数据库字段类型保持 `VARCHAR` 兼容，无需修改表结构
+> - `ApplicationContext` 启动时自动初始化 ID 生成器，业务代码**无需手动初始化**
+
 ### 6.2 领域层
 
 #### 6.2.1 Entity/Model → RBatis Entity
@@ -746,7 +788,7 @@ pub struct Device {
 
 impl Device {
     pub fn create(name: String, serial_number: String) -> (Self, DeviceCreatedEvent) {
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = genies::next_id();  // 使用雪花 ID 替代 UUID
         let device = Self { id: id.clone(), name: name.clone(), serial_number, status: 0 };
         let event = DeviceCreatedEvent { id, name, created_at: chrono::Utc::now().timestamp_millis() };
         (device, event)
@@ -906,7 +948,7 @@ deviceRepository.save(entity);
 use genies::copy;
 
 let mut entity: DeviceEntity = copy!(&request, DeviceEntity);
-entity.id = Some(uuid::Uuid::new_v4().to_string());
+entity.id = Some(genies::next_id());  // 使用雪花 ID 替代 UUID
 DeviceEntity::insert(rb, &entity).await.unwrap();
 ```
 

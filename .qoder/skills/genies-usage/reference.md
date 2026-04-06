@@ -29,6 +29,7 @@
 | `dapr_cdc_message_period` | i64 | - | CDC 消息轮询周期（毫秒） |
 | `processing_expire_seconds` | i64 | - | 消息处理超时时间（秒） |
 | `record_reserve_minutes` | i64 | - | 消息记录保留时间（分钟） |
+| `machine_id` | Option\<i64\> | Auto-resolved | 雪花算法 Worker ID。自动解析顺序：Redis 槽位 → K8s HOSTNAME → 此配置项 → 兜底值(1) |
 
 ## application.yml 完整示例
 

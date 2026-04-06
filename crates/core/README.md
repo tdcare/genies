@@ -152,6 +152,30 @@ let matches = obj_test(&obj, &condition);
 | String | `contain`, `!contain` |
 | Array | `arr_size_*`, `arr_exist_*`, `arr_each_*` |
 
+### ID Generation Module
+
+Provides a globally unique Snowflake ID generator based on `rs-snowflake`. Generates 64-bit distributed IDs as `String`, suitable for database VARCHAR primary keys.
+
+#### API
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `init` | `fn init(machine_id: i32, datacenter_id: i32)` | Initialize the generator (called once at startup by `ApplicationContext`) |
+| `next_id` | `fn next_id() -> String` | Generate a globally unique ID |
+
+#### Usage
+
+```rust
+// In business code (via genies re-export)
+let id = genies::next_id();
+
+// In core libraries (direct access)
+let id = genies_core::id_gen::next_id();
+```
+
+> **Note**: The generator is automatically initialized during `ApplicationContext::new()`. 
+> Do NOT call `init()` manually unless you have a specific reason.
+
 ## Quick Start
 
 ### 1. Add Dependency
@@ -201,6 +225,19 @@ async fn verify_request(token: &str) -> Result<JWTToken, Error> {
     
     JWTToken::verify_with_keycloak(&keys, token)
 }
+```
+
+### 4. ID Generation
+
+```rust
+use genies_core::id_gen;
+
+// Initialization (usually done automatically by ApplicationContext)
+id_gen::init(1, 1);
+
+// Generate unique IDs
+let order_id = id_gen::next_id();    // e.g. "7446616570199150889"
+let event_id = id_gen::next_id();    // e.g. "7446616570199150890"
 ```
 
 ## When to Use RespVO vs ResultDTO

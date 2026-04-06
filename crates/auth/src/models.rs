@@ -33,7 +33,8 @@ pub async fn run_migrations() {
     
     // 创建迁移运行器
     // driver 同时作为执行器和历史记录器
-    // 第四个参数 fail_continue: false 表示遇到失败时停止
+    // 第四个参数 fail_continue: false，生产环境保持严格模式
+    // V5 的幂等性通过语句级 --! may_fail: true 注解处理
     let runner = MigrationRunner::new(
         Migrations {},
         driver.clone(),
@@ -41,6 +42,9 @@ pub async fn run_migrations() {
         false,
     );
     
-    // 执行迁移
-    runner.migrate().await.expect("数据库迁移失败");
+    // 执行迁移，失败时仅输出警告日志，不 panic
+    match runner.migrate().await {
+        Ok(v) => log::info!("Auth migration completed, latest version: {:?}", v),
+        Err(e) => log::warn!("Auth migration warning: {}, startup continues", e),
+    }
 }

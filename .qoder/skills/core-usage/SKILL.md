@@ -342,3 +342,34 @@ keycloak_credentials_secret: "your-client-secret"
 - [crates/core/src/jwt.rs](file:///d:/tdcare/genies/crates/core/src/jwt.rs) - JWT 工具函数
 - [crates/core/src/condition.rs](file:///d:/tdcare/genies/crates/core/src/condition.rs) - 条件表达式求值
 - [crates/core/src/page.rs](file:///d:/tdcare/genies/crates/core/src/page.rs) - Spring Data Page 兼容分页结构
+- [crates/core/src/id_gen.rs](file:///d:/tdcare/genies/crates/core/src/id_gen.rs) - 雪花 ID 生成器
+
+## ID Generation Module
+
+The `id_gen` module provides globally unique Snowflake IDs.
+
+### API
+
+- `genies_core::id_gen::init(machine_id: i32, datacenter_id: i32)` — Initialize (auto-called by `ApplicationContext`)
+- `genies_core::id_gen::next_id() -> String` — Generate unique ID
+
+### Usage in Business Code
+
+```rust
+// Preferred: use the re-export from genies crate
+let id = genies::next_id();
+```
+
+### Usage in Core Libraries
+
+```rust
+// When genies crate is not available (e.g., in crates/ddd)
+let id = genies_core::id_gen::next_id();
+```
+
+### Key Points
+
+- IDs are 64-bit integers serialized as `String` to avoid JavaScript precision loss
+- The generator MUST be initialized before calling `next_id()`, or it will panic
+- `ApplicationContext::new()` automatically handles initialization with Redis-based worker_id assignment
+- Replaces all previous `uuid::Uuid::new_v4()` usage in the project

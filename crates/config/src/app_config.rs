@@ -77,7 +77,9 @@ pub struct ApplicationConfig {
     /// 事件消费 参数
     pub processing_expire_seconds: i64,
     pub record_reserve_minutes: i64,
-    
+    /// 雪花算法机器ID（可选，不配置时自动从 Redis/HOSTNAME 获取）
+    pub machine_id: Option<i64>,
+
     // pub isPollWrite:i64,
     // pub printFlag: Option<i32>,
     // pub test_i64:Option<i64>,

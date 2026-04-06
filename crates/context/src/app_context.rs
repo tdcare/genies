@@ -4,6 +4,7 @@ use genies_core::jwt::*;
 use serde::{Deserialize, Serialize};
 use genies_config::app_config::ApplicationConfig;
 use genies_cache::cache_service::CacheService;
+
 use rbatis::RBatis;
 // use rbdc::deadpool::managed::{PoolBuilder, Timeouts};
 // use rbdc::pool::{ManagerPorxy, Pool, RBDCManager};
@@ -48,6 +49,71 @@ pub struct ApplicationContext {
     pub redis_save_service: CacheService,
     pub keycloak_keys: Keys,
     db_init_once: Once,  // 线程安全的初始化标志
+}
+
+/// 尝试在 Redis 中注册一个雪花算法槽位
+async fn try_register_slot(cache: &CacheService, server_name: &str) -> Option<(i32, String)> {
+    for i in 0..1024i32 {
+        let key = format!("snowflake:slot:{}:{}", server_name, i);
+        match cache.set_string_ex_nx(&key, "1", Some(std::time::Duration::from_secs(3600))).await {
+            Ok(true) => return Some((i, key)),
+            _ => continue,
+        }
+    }
+    None
+}
+
+/// 按优先级解析 worker_id：Redis 槽位 → K8s HOSTNAME → 配置 → 兜底
+fn resolve_worker_id(config: &ApplicationConfig, cache: &CacheService) -> i32 {
+    // 1. Redis 槽位注册（直接复用传入的 cache）
+    if config.cache_type == "redis" {
+        // 安全地执行 async 代码，兼容 "已在 tokio runtime 中" 和 "未在 runtime 中" 两种场景
+        let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            // 已在 tokio runtime 中（如 #[tokio::main]），使用 block_in_place 避免嵌套 panic
+            tokio::task::block_in_place(|| {
+                handle.block_on(try_register_slot(cache, &config.server_name))
+            })
+        } else {
+            // 不在 tokio runtime 中，创建临时 runtime
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(try_register_slot(cache, &config.server_name))
+        };
+
+        if let Some((id, key)) = result {
+            log::info!("Registered snowflake worker_id via Redis slot: {}", id);
+            // 启动后台续约任务
+            // 续约 30 分钟后才首次执行，此时全局 CONTEXT 已初始化完成，直接复用其 cache_service
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async move {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(30 * 60)).await;
+                        match crate::CONTEXT.cache_service.set_string_ex(&key, "1", Some(std::time::Duration::from_secs(3600))).await {
+                            Ok(_) => log::debug!("Renewed snowflake slot TTL: {}", key),
+                            Err(e) => log::warn!("Failed to renew snowflake slot: {}", e),
+                        }
+                    }
+                });
+            });
+            return id;
+        }
+    }
+    // 2. K8s HOSTNAME
+    if let Ok(hostname) = std::env::var("HOSTNAME") {
+        if let Some(id) = hostname.rsplit('-').next().and_then(|s| s.parse::<i32>().ok()) {
+            let worker_id = id % 1024;
+            log::info!("Using K8s pod ordinal as machine_id: {}", worker_id);
+            return worker_id;
+        }
+    }
+    // 3. 配置文件
+    if let Some(id) = config.machine_id {
+        log::info!("Using configured machine_id: {}", id);
+        return id as i32;
+    }
+    // 4. 兜底
+    log::warn!("Using fallback machine_id: 1");
+    1
 }
 
 /// 根据数据库 URL scheme 创建对应的驱动实例
@@ -125,6 +191,14 @@ impl ApplicationContext {
        
         let auth_url = config.keycloak_auth_server_url.clone();
         let auth_realm = config.keycloak_realm.clone();
+        
+        let cache_service = CacheService::new(&config);
+        let redis_save_service = CacheService::new_saved(&config);
+        
+        // 初始化雪花 ID 生成器
+        let machine_id = resolve_worker_id(&config, &cache_service);
+        genies_core::id_gen::init(machine_id, 1);
+        
         ApplicationContext {
             keycloak_keys: std::thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().unwrap();
@@ -134,8 +208,8 @@ impl ApplicationContext {
             }).join().unwrap()
                 .expect("Failed to get keycloak keys"),
             rbatis: RBatis::new(),
-            cache_service: CacheService::new(&config),
-            redis_save_service: CacheService::new_saved(&config),
+            cache_service,
+            redis_save_service,
             config,
             db_init_once: Once::new(),
         }

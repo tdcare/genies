@@ -637,3 +637,38 @@ let router = Router::new()
 - 用户组（Groups）
 - Casbin 模型配置
 - OpenAPI Schema 浏览
+
+## 17. ID 生成
+
+Genies 提供了统一的雪花 ID 生成器，用于替代 UUID 生成所有业务 ID。
+
+### 用法
+
+```rust
+// 生成唯一 ID — 最常见的用法
+let id = genies::next_id();
+
+// 示例：创建新实体
+ward.id = Some(genies::next_id());
+```
+
+### 工作原理
+
+- 使用 `rs-snowflake`（64 位分布式雪花算法）
+- Worker ID 在启动时自动解析：Redis 槽位 → K8s HOSTNAME → 配置项 → 兜底值
+- ID 以 `String` 类型返回，避免 JavaScript 精度丢失问题
+- 通过 `Mutex<SnowflakeIdBucket>` 包装在 `OnceLock` 中，保证线程安全
+
+### 从 UUID 迁移
+
+替换所有以下写法：
+```rust
+// 迁移前
+use uuid::Uuid;
+let id = Uuid::new_v4().to_string();
+
+// 迁移后
+let id = genies::next_id();
+```
+
+迁移完成后，从 `Cargo.toml` 依赖中移除 `uuid`。

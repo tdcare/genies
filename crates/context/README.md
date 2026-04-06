@@ -39,9 +39,12 @@ genies_context provides centralized management of application runtime context in
 ```
 Application Start → CONTEXT (lazy_static) → init_database() → Ready
                          │
-                         ├── ApplicationConfig (./application.yml)
-                         ├── Keycloak Keys (async fetch)
-                         ├── CacheService (Redis)
+                         ├── ApplicationContext::new()
+                         │       ├── ApplicationConfig (./application.yml)
+                         │       ├── Keycloak Keys (async fetch)
+                         │       ├── CacheService (Redis)
+                         │       └── Snowflake ID Generator (worker_id resolution)
+                         │
                          └── RBatis (auto-selected driver based on URL scheme)
 ```
 
@@ -154,6 +157,19 @@ impl ApplicationContext {
 }
 ```
 
+### Snowflake ID Generator Initialization
+
+During `ApplicationContext::new()`, the framework automatically resolves a unique `worker_id` and initializes the global Snowflake ID generator.
+
+#### Worker ID Resolution Priority
+
+| Priority | Source | Condition | Description |
+|----------|--------|-----------|-------------|
+| 1 | Redis Slot | `cache_type = "redis"` | Registers slot via `SETNX snowflake:slot:{server_name}:{0..1023}` with 1-hour TTL. Background task renews every 30 minutes. |
+| 2 | K8s HOSTNAME | `HOSTNAME` env var ends with number | Extracts pod ordinal (e.g., `sickbed-service-2` → 2), modulo 1024 |
+| 3 | Config | `machine_id` in application.yml | Uses configured value directly |
+| 4 | Fallback | Always | Defaults to `1` |
+
 ### Global Singletons
 
 ```rust
@@ -245,6 +261,15 @@ white_list_api:
   - "/dapr/*"
   - "/swagger-ui/*"
 ```
+
+#### Snowflake ID Configuration
+
+```yaml
+# Optional: manually set machine_id (priority 3, after Redis and K8s)
+machine_id: 1
+```
+
+When `cache_type` is `"redis"`, the framework automatically registers a Redis slot — no manual configuration needed.
 
 ## Auth Middleware Flow
 

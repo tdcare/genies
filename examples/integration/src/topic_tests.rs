@@ -96,9 +96,9 @@ async fn test_topic_hoop_router_registered() {
 async fn test_topic_first_consumption_success() {
     // 模拟首次消费成功的完整流程
     let cache = &CONTEXT.redis_save_service;
-    let msg_id = uuid::Uuid::new_v4().to_string();
+    let msg_id = genies::next_id();
     let key = format!("{}-on_test_event-TestEvent-{}", CONTEXT.config.server_name, msg_id);
-    
+
     // 1. NX 抢锁 → 成功
     let acquired = cache.set_string_ex_nx(&key, "CONSUMING", Some(Duration::from_secs(60)))
         .await.unwrap();
@@ -124,13 +124,13 @@ async fn test_topic_first_consumption_success() {
 async fn test_topic_duplicate_consumed_skip() {
     // 模拟重复消息 → 已消费 → 跳过
     let cache = &CONTEXT.redis_save_service;
-    let msg_id = uuid::Uuid::new_v4().to_string();
+    let msg_id = genies::next_id();
     let key = format!("{}-on_test_event-TestEvent-{}", CONTEXT.config.server_name, msg_id);
-    
+
     // 预设 key 为 CONSUMED 状态（模拟已消费过）
     let _ = cache.set_string_ex(&key, "CONSUMED", Some(Duration::from_secs(600)))
         .await.unwrap();
-    
+
     // NX 抢锁 → 失败（key 已存在）
     let acquired = cache.set_string_ex_nx(&key, "CONSUMING", Some(Duration::from_secs(60)))
         .await.unwrap();
@@ -168,7 +168,7 @@ async fn test_topic_idempotent_key_format() {
 async fn test_topic_concurrent_consumption() {
     // 模拟并发消费竞争 → 只有 1 个获得消费权
     let cache = &CONTEXT.redis_save_service;
-    let msg_id = uuid::Uuid::new_v4().to_string();
+    let msg_id = genies::next_id();
     let key = format!("{}-on_test_event-concurrent-{}", CONTEXT.config.server_name, msg_id);
     
     let mut handles = vec![];
@@ -207,7 +207,7 @@ async fn ensure_mysql_init() {
 async fn test_topic_handler_db_failure_cleanup() {
     // 模拟 handler 返回 Err → 删除 Redis key → 可重新消费
     let cache = &CONTEXT.redis_save_service;
-    let msg_id = uuid::Uuid::new_v4().to_string();
+    let msg_id = genies::next_id();
     let key = format!("{}-on_test_event-db_fail-{}", CONTEXT.config.server_name, msg_id);
     
     // 1. NX 抢锁成功
@@ -230,7 +230,7 @@ async fn test_topic_handler_db_failure_cleanup() {
 async fn test_topic_db_failure_allows_retry() {
     // 模拟失败后重试 → del key 后新的 NX 成功
     let cache = &CONTEXT.redis_save_service;
-    let msg_id = uuid::Uuid::new_v4().to_string();
+    let msg_id = genies::next_id();
     let key = format!("{}-on_test_event-retry-{}", CONTEXT.config.server_name, msg_id);
     
     // 第一次：NX 成功 → handler 失败 → del key
@@ -296,7 +296,7 @@ async fn test_topic_transaction_rollback_on_failure() {
 async fn test_topic_consuming_state_triggers_retry() {
     // 模拟 key 处于 CONSUMING 状态 → 应标记重试
     let cache = &CONTEXT.redis_save_service;
-    let msg_id = uuid::Uuid::new_v4().to_string();
+    let msg_id = genies::next_id();
     let key = format!("{}-on_test_event-consuming-{}", CONTEXT.config.server_name, msg_id);
     
     // 模拟另一个实例正在处理：预设 key 为 CONSUMING
@@ -321,7 +321,7 @@ async fn test_topic_consuming_state_triggers_retry() {
 async fn test_topic_consuming_expire_prevents_deadlock() {
     // 模拟 CONSUMING 过期 → 防死锁 → 可重新消费
     let cache = &CONTEXT.redis_save_service;
-    let msg_id = uuid::Uuid::new_v4().to_string();
+    let msg_id = genies::next_id();
     let key = format!("{}-on_test_event-expire-{}", CONTEXT.config.server_name, msg_id);
     
     // 设置极短 TTL 的 CONSUMING 状态（模拟处理超时）
@@ -349,7 +349,7 @@ async fn test_topic_consuming_expire_prevents_deadlock() {
 async fn test_topic_consumed_update_failure_retry() {
     // 模拟 handler 成功但 set CONSUMED 失败 → key 仍为 CONSUMING → 需重试
     let cache = &CONTEXT.redis_save_service;
-    let msg_id = uuid::Uuid::new_v4().to_string();
+    let msg_id = genies::next_id();
     let key = format!("{}-on_test_event-consumed_fail-{}", CONTEXT.config.server_name, msg_id);
     
     // 1. NX 抢锁成功

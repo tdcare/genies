@@ -21,7 +21,6 @@ log = { workspace = true }
 async-trait = { workspace = true }
 futures = "0.3"
 anyhow = { workspace = true }
-uuid = { version = "1", features = ["v4"] }
 rs-snowflake = "0.6"
 salvo = { workspace = true }
 chrono = "0.4"

@@ -1,8 +1,8 @@
 #![allow(non_snake_case)]
 
 use fastdate::DateTime;
+use genies_core::id_gen;
 use rbatis::executor::Executor;
-use uuid::Uuid;
 
 use crate::{
     aggregate::{AggregateType, WithAggregateId},
@@ -43,7 +43,7 @@ pub async fn publish<A: AggregateType + WithAggregateId>(
     let headers = m.headers;
     let payload = m.payload;
     let message = Message {
-        id: Some(Uuid::new_v4().to_string()),
+        id: Some(id_gen::next_id()),
         destination: headers.clone().DESTINATION,
         headers: Some(serde_json::to_string(&headers).unwrap()),
         payload,
@@ -79,7 +79,7 @@ pub fn buildMessage<A: AggregateType + WithAggregateId>(
 }
 
 pub fn buildGenericMessage(domain_event: Box<dyn DomainEvent>) -> MessageImpl {
-    let aggregate_id = Some(Uuid::new_v4().to_string());
+    let aggregate_id = Some(id_gen::next_id());
     let  headers = Headers {
         ID: aggregate_id.clone(),
         PARTITION_ID: aggregate_id.clone(),

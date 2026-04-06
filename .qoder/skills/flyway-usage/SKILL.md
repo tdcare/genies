@@ -192,9 +192,7 @@ SQL 注释中可使用 `--!` 前缀 + YAML 格式添加注解：
 CREATE INDEX idx_users_email ON users(email);
 ```
 
-`may_fail: true` — 标记此语句允许失败。
-
-> **注意**：注解解析在 `flyway-sql-changelog` 层已实现，但当前 RBatis 驱动**尚未消费**注解信息。`SqlStatement.annotation` 字段会被正确解析填充，但执行时不会据此改变行为。如需容错，应使用 `MigrationRunner` 的 `fail_continue: true` 参数（文件级别）。
+`may_fail: true` — 标记此语句允许失败。执行失败时跳过并记录警告，不中断迁移流程。
 
 ### ChangelogFile API
 
