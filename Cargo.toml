@@ -20,6 +20,7 @@ genies_dapr = {version = "1.6.0", path = "crates/dapr" }
 genies_ddd = {version = "1.6.0", path = "crates/ddd" }
 genies_k8s = { version = "1.6.0", path = "crates/k8s" }
 genies_auth = { version = "1.6.0", path = "crates/auth" }
+genies_test = { version = "1.6.0", path = "crates/test" }
 
 
 log = "0.4.17"

@@ -6,6 +6,7 @@ use salvo::prelude::*;
 use salvo::http::StatusCode;
 use crate::app_context::ApplicationContext;
 use crate::CONTEXT;
+use crate::request_token::REQUEST_TOKEN;
 
 ///是否处在白名单接口中
 pub fn is_white_list_api(
@@ -91,7 +92,7 @@ pub async fn check_auth(
 }
 /// salvo jwt check
 #[handler]
-pub async fn salvo_auth(req: &mut Request,_depot: &mut Depot,res: &mut Response, _ctrl: &mut FlowCtrl) {
+pub async fn salvo_auth(req: &mut Request, depot: &mut Depot, res: &mut Response, ctrl: &mut FlowCtrl) {
     let token = req.headers().get("Authorization").map(|v|v.to_str().unwrap_or_default().to_string()).unwrap_or_default();
     let path =req.uri().path().to_string();
 
@@ -101,8 +102,12 @@ pub async fn salvo_auth(req: &mut Request,_depot: &mut Depot,res: &mut Response,
             Ok(data) => {
                 match check_auth(&CONTEXT, &data, &path).await {
                     Ok(_) => {
-                        _depot.insert("jwtToken",data.clone());
-                        _depot.insert("token",token);
+                        depot.insert("jwtToken",data.clone());
+                        depot.insert("token",token.clone());
+                        // 将下游调用链包裹在 REQUEST_TOKEN scope 中，
+                        // 使得 #[remote] 宏和手写远程调用能自动获取当前请求的用户 token
+                        REQUEST_TOKEN.scope(token, ctrl.call_next(req, depot, res)).await;
+                        return;
                     }
                     Err(e) => {
                         //仅提示拦截
@@ -130,5 +135,12 @@ pub async fn salvo_auth(req: &mut Request,_depot: &mut Depot,res: &mut Response,
                 res.render(Json(resp));
             }
         }
+    } else {
+        // 白名单接口也尝试传递 token（如果有的话），方便下游远程调用
+        if !token.is_empty() {
+            REQUEST_TOKEN.scope(token, ctrl.call_next(req, depot, res)).await;
+            return;
+        }
+        ctrl.call_next(req, depot, res).await;
     }
 }

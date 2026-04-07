@@ -1,0 +1,23 @@
+[package]
+name = "genies_test"
+version = "1.6.0"
+authors = ["tdcare"]
+edition = "2021"
+license = "MIT/Apache-2.0"
+description = "Genies 框架测试工具库 - 提供对比测试、数据库快照/差异/还原、Deep Diff 等基础设施"
+keywords = ["testing", "comparison", "database", "snapshot"]
+categories = ["development-tools::testing"]
+documentation = "https://docs.rs/genies_test"
+readme = "README.zh-CN.md"
+
+[lib]
+
+[dependencies]
+once_cell = "1"
+rbatis = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+rbs = { workspace = true }
+
+[dev-dependencies]

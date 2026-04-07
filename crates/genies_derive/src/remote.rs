@@ -20,7 +20,30 @@ pub(crate) fn impl_remote(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenStr
     // let func_name = func_name_ident.to_string();
 
     let attrs = target_fn.attrs.clone();
-    let feign_http_macro = attrs.first().unwrap().to_token_stream();
+    // Find the feignhttp HTTP method attribute (get/post/put/delete/patch),
+    // skipping doc comments and other non-feignhttp attributes.
+    let http_methods = ["get", "post", "put", "delete", "patch"];
+    let feign_http_attr_idx = attrs.iter().position(|attr| {
+        attr.path.segments.last()
+            .map(|seg| http_methods.contains(&seg.ident.to_string().as_str()))
+            .unwrap_or(false)
+    }).expect("[genies] #[remote] requires a feignhttp HTTP method attribute (e.g., #[get(...)])");
+
+    // Fully-qualify the feignhttp attribute path (e.g., #[get(...)] → #[feignhttp::get(...)])
+    // to ensure proper resolution in the generated code regardless of user imports.
+    let mut feign_http_attr = attrs[feign_http_attr_idx].clone();
+    let feignhttp_segment = syn::PathSegment {
+        ident: Ident::new("feignhttp", Span::call_site()),
+        arguments: syn::PathArguments::None,
+    };
+    feign_http_attr.path.segments.insert(0, feignhttp_segment);
+    let feign_http_macro = feign_http_attr.to_token_stream();
+
+    // Collect remaining attributes (doc comments, etc.) to preserve on the generated wrapper fn
+    let other_attrs: Vec<_> = attrs.iter().enumerate()
+        .filter(|(i, _)| *i != feign_http_attr_idx)
+        .map(|(_, a)| a)
+        .collect();
 
     let func_args_stream = target_fn.sig.inputs.to_token_stream();
 
@@ -70,28 +93,35 @@ pub(crate) fn impl_remote(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenStr
     // 因为 #[remote] 作用于 core-api/remote 中的 feignhttp 函数上
     // 所以这段代码在编译阶段被展开后，作用于 core-api/remote 目录中函数所在位置的mod 中。
     let wrapper_feignhttp_code = quote! {
+        #(#other_attrs)*
         pub async fn #func_name_ident(#func_args) -> #return_ty{
-             let bearer = genies::context::REMOTE_TOKEN.lock().unwrap().access_token.clone();
-        let bearer = format!("Bearer {}", &bearer);
-        let mut feignhttp_return = #feignhttp_ident( &bearer #func_args_do).await;
-        return if feignhttp_return.is_ok() {
-            feignhttp_return
-        } else {
-            let err = feignhttp_return.as_ref().err().unwrap();
-            if err.to_string().contains("401 Unauthorized") {
-                if let Ok(remote_token_new) = genies::core::jwt::get_temp_access_token(
-                    &genies::context::CONTEXT.config.keycloak_auth_server_url,
-                    &genies::context::CONTEXT.config.keycloak_realm,
-                    &genies::context::CONTEXT.config.keycloak_resource,
-                    &genies::context::CONTEXT.config.keycloak_credentials_secret,
-                ).await {
-                    genies::context::REMOTE_TOKEN.lock().unwrap().access_token = remote_token_new.clone();
-                    let bearer = format!("Bearer {}", &remote_token_new);
-                    feignhttp_return = #feignhttp_ident( &bearer #func_args_do).await;
+            // 优先使用请求级用户 token（从 salvo_auth 中间件通过 task_local 传递）
+            let is_user_token = genies::context::request_token::get_request_token().is_some();
+            let bearer = genies::context::request_token::get_request_token()
+                .unwrap_or_else(|| {
+                    // 降级：使用 service account token（用于定时任务、初始化等非请求上下文场景）
+                    let token = genies::context::REMOTE_TOKEN.lock().unwrap().access_token.clone();
+                    format!("Bearer {}", &token)
+                });
+            let mut feignhttp_return = #feignhttp_ident( &bearer #func_args_do).await;
+            // 401 重试仅在使用 service account token 时触发
+            if !is_user_token {
+                if let Err(ref e) = feignhttp_return {
+                    if e.to_string().contains("401 Unauthorized") {
+                        if let Ok(remote_token_new) = genies::core::jwt::get_temp_access_token(
+                            &genies::context::CONTEXT.config.keycloak_auth_server_url,
+                            &genies::context::CONTEXT.config.keycloak_realm,
+                            &genies::context::CONTEXT.config.keycloak_resource,
+                            &genies::context::CONTEXT.config.keycloak_credentials_secret,
+                        ).await {
+                            genies::context::REMOTE_TOKEN.lock().unwrap().access_token = remote_token_new.clone();
+                            let bearer = format!("Bearer {}", &remote_token_new);
+                            feignhttp_return = #feignhttp_ident( &bearer #func_args_do).await;
+                        }
+                    }
                 }
             }
             feignhttp_return
-        }
         }
     };
 
