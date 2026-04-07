@@ -113,6 +113,29 @@ pub fn db_diff(before: &[Value], after: &[Value], pk_field: &str) -> Vec<DbChang
     changes
 }
 
+/// 带重试的 exec 执行，用于应对远程数据库偶发的网络抖动超时。
+async fn exec_with_retry(rb: &RBatis, sql: &str, values: Vec<rbs::Value>, op_name: &str) {
+    let max_retries = 3;
+    for attempt in 1..=max_retries {
+        match rb.exec(sql, values.clone()).await {
+            Ok(_) => return,
+            Err(e) if attempt < max_retries => {
+                println!(
+                    "  ⚠ db_restore {} 第 {} 次尝试失败: {}，2秒后重试...",
+                    op_name, attempt, e
+                );
+                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            }
+            Err(e) => {
+                panic!(
+                    "db_restore {} 失败（已重试 {} 次）: {}",
+                    op_name, max_retries, e
+                );
+            }
+        }
+    }
+}
+
 /// 根据 db_diff 的结果，将数据库还原到提交前的状态。
 pub async fn db_restore(rb: &RBatis, table: &str, pk_field: &str, changes: &[DbChange]) {
     for change in changes {
@@ -120,9 +143,7 @@ pub async fn db_restore(rb: &RBatis, table: &str, pk_field: &str, changes: &[DbC
             ChangeType::Insert(_) => {
                 let sql = format!("DELETE FROM {} WHERE {} = ?", table, pk_field);
                 let pk = rbs::to_value(&change.pk_value).unwrap();
-                rb.exec(&sql, vec![pk])
-                    .await
-                    .unwrap_or_else(|e| panic!("db_restore DELETE 失败: {}", e));
+                exec_with_retry(rb, &sql, vec![pk], "DELETE").await;
             }
             ChangeType::Delete(row) => {
                 if let Value::Object(map) = row {
@@ -138,9 +159,7 @@ pub async fn db_restore(rb: &RBatis, table: &str, pk_field: &str, changes: &[DbC
                         .iter()
                         .map(|col| rbs::to_value(&map[*col]).unwrap())
                         .collect();
-                    rb.exec(&sql, values)
-                        .await
-                        .unwrap_or_else(|e| panic!("db_restore INSERT 失败: {}", e));
+                    exec_with_retry(rb, &sql, values, "INSERT").await;
                 }
             }
             ChangeType::Update { before, .. } => {
@@ -162,9 +181,7 @@ pub async fn db_restore(rb: &RBatis, table: &str, pk_field: &str, changes: &[DbC
                         .map(|k| rbs::to_value(&map[k]).unwrap())
                         .collect();
                     values.push(rbs::to_value(&change.pk_value).unwrap());
-                    rb.exec(&sql, values)
-                        .await
-                        .unwrap_or_else(|e| panic!("db_restore UPDATE 失败: {}", e));
+                    exec_with_retry(rb, &sql, values, "UPDATE").await;
                 }
             }
         }
