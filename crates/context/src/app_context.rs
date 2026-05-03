@@ -20,24 +20,44 @@ pub struct RemoteToken {
 }
 
 impl RemoteToken {
-   pub fn new() -> Self {
+    pub fn new() -> Self {
         let config = ApplicationConfig::from_sources("./application.yml").unwrap();
-        let url = config.keycloak_auth_server_url.clone();
-        let realm = config.keycloak_realm.clone();
-        let resource = config.keycloak_resource.clone();
-        let secret = config.keycloak_credentials_secret.clone();
-        Self {
-            access_token: std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(async {
-                    get_temp_access_token(&url, &realm, &resource, &secret)
-                        .await
-                        .unwrap_or_else(|e| {
-                            log::error!("Failed to get temp access token: {}", e);
-                            String::new()
-                        })
-                })
-            }).join().unwrap(),
+
+        if config.auth_mode == "local" {
+            // local 模式：使用 jwt_secret 本地生成服务 JWT
+            let jwt_secret = config.jwt_secret.clone();
+            Self {
+                access_token: std::thread::spawn(move || {
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        get_local_service_token(&jwt_secret)
+                            .await
+                            .unwrap_or_else(|e| {
+                                log::error!("Failed to generate local service token: {}", e);
+                                String::new()
+                            })
+                    })
+                }).join().unwrap(),
+            }
+        } else {
+            // keycloak 模式：保持原有逻辑
+            let url = config.keycloak_auth_server_url.clone();
+            let realm = config.keycloak_realm.clone();
+            let resource = config.keycloak_resource.clone();
+            let secret = config.keycloak_credentials_secret.clone();
+            Self {
+                access_token: std::thread::spawn(move || {
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        get_temp_access_token(&url, &realm, &resource, &secret)
+                            .await
+                            .unwrap_or_else(|e| {
+                                log::error!("Failed to get temp access token: {}", e);
+                                String::new()
+                            })
+                    })
+                }).join().unwrap(),
+            }
         }
     }
 }

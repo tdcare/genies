@@ -216,6 +216,13 @@ fn extract_schema_fields(schema_def: &Value) -> Vec<(String, Option<String>, Opt
     // 遍历每个字段
     for (field_name, field_def) in properties {
         let field_type = extract_field_type(field_def);
+        if field_type.is_none() {
+            log::warn!(
+                "[SCHEMA_DEBUG] 无法提取字段 '{}' 的类型，原始定义: {}",
+                field_name,
+                serde_json::to_string(field_def).unwrap_or_default()
+            );
+        }
         let field_description = field_def.get("description")
             .and_then(|d| d.as_str())
             .map(|s| s.to_string());
@@ -227,26 +234,57 @@ fn extract_schema_fields(schema_def: &Value) -> Vec<(String, Option<String>, Opt
 
 /// 提取字段类型
 ///
-/// 支持基本类型、数组类型和引用类型
+/// 支持以下 OpenAPI 格式：
+/// - 基本类型：`{"type": "string"}`, `{"type": "integer", "format": "int64"}`
+/// - 数组类型：`{"type": "array", "items": {...}}`
+/// - 引用类型：`{"$ref": "#/components/schemas/Foo"}`
+/// - **OpenAPI 3.1 type 数组**（Option 简单类型）：`{"type": ["string", "null"]}`,
+///   `{"type": ["integer", "null"], "format": "int64"}`
+/// - **oneOf/anyOf/allOf 组合类型**（Option 复杂类型）：
+///   `{"oneOf": [{"type": "null"}, {"$ref": "..."}]}`，
+///   `{"anyOf": [{"type": "string"}, {"nullable": true}]}`
 fn extract_field_type(field_def: &Value) -> Option<String> {
-    // 优先检查直接的 type 字段
-    if let Some(type_val) = field_def.get("type").and_then(|t| t.as_str()) {
-        // 如果是数组类型，尝试获取元素类型
-        if type_val == "array" {
-            if let Some(items) = field_def.get("items") {
-                if let Some(item_type) = extract_field_type(items) {
-                    return Some(format!("array<{}>", item_type));
+    // 检查 type 字段
+    if let Some(type_node) = field_def.get("type") {
+        // OpenAPI 3.1: type 数组格式，如 ["string", "null"] 或 ["integer", "null"]
+        if let Some(type_arr) = type_node.as_array() {
+            // 从数组中找第一个非 "null" 的类型
+            let actual_type = type_arr.iter()
+                .filter_map(|v| v.as_str())
+                .find(|t| *t != "null");
+            if let Some(type_val) = actual_type {
+                if type_val == "array" {
+                    if let Some(items) = field_def.get("items") {
+                        if let Some(item_type) = extract_field_type(items) {
+                            return Some(format!("array<{}>", item_type));
+                        }
+                    }
+                    return Some("array".to_string());
                 }
+                if let Some(format) = field_def.get("format").and_then(|f| f.as_str()) {
+                    return Some(format!("{}({})", type_val, format));
+                }
+                return Some(type_val.to_string());
             }
-            return Some("array".to_string());
+            // 数组中只有 "null"，返回 "null"
+            return Some("null".to_string());
         }
         
-        // 检查是否有 format 补充信息
-        if let Some(format) = field_def.get("format").and_then(|f| f.as_str()) {
-            return Some(format!("{}({})", type_val, format));
+        // 标准单值 type 字符串
+        if let Some(type_val) = type_node.as_str() {
+            if type_val == "array" {
+                if let Some(items) = field_def.get("items") {
+                    if let Some(item_type) = extract_field_type(items) {
+                        return Some(format!("array<{}>", item_type));
+                    }
+                }
+                return Some("array".to_string());
+            }
+            if let Some(format) = field_def.get("format").and_then(|f| f.as_str()) {
+                return Some(format!("{}({})", type_val, format));
+            }
+            return Some(type_val.to_string());
         }
-        
-        return Some(type_val.to_string());
     }
     
     // 检查 $ref 引用
@@ -254,18 +292,64 @@ fn extract_field_type(field_def: &Value) -> Option<String> {
         return Some(extract_ref_name(ref_val));
     }
     
-    // 检查 allOf/oneOf/anyOf 组合类型
+    // 检查 allOf/oneOf/anyOf 组合类型，递归提取实际类型
     for combiner in ["allOf", "oneOf", "anyOf"] {
         if let Some(items) = field_def.get(combiner).and_then(|a| a.as_array()) {
-            if let Some(first_item) = items.first() {
-                if let Some(ref_val) = first_item.get("$ref").and_then(|r| r.as_str()) {
-                    return Some(extract_ref_name(ref_val));
+            for item in items {
+                // 跳过 null 标记元素
+                if is_nullable_marker(item) {
+                    continue;
+                }
+                if let Some(resolved) = extract_field_type(item) {
+                    return Some(resolved);
                 }
             }
         }
     }
     
     None
+}
+
+/// 判断一个 Schema 元素是否为 nullable 标记
+///
+/// OpenAPI 中 `Option<T>` 的 null 分支有两种表示：
+/// - OpenAPI 3.0 风格：`{"nullable": true}`（无 type/$ref/combiner）
+/// - OpenAPI 3.1 风格：`{"type": "null"}`
+fn is_nullable_marker(item: &Value) -> bool {
+    let obj = match item.as_object() {
+        Some(o) => o,
+        None => return false,
+    };
+    
+    // OpenAPI 3.1: {"type": "null"} — 仅包含 type=null 的元素
+    if let Some(type_val) = obj.get("type").and_then(|v| v.as_str()) {
+        if type_val == "null" {
+            return true;
+        }
+    }
+    
+    // OpenAPI 3.0: {"nullable": true}（无 type/$ref/allOf/oneOf/anyOf）
+    if obj.get("nullable").and_then(|v| v.as_bool()) == Some(true) {
+        let has_type_info = obj.contains_key("type")
+            || obj.contains_key("$ref")
+            || obj.contains_key("allOf")
+            || obj.contains_key("oneOf")
+            || obj.contains_key("anyOf");
+        return !has_type_info;
+    }
+    
+    // 空对象或仅含 default: null（如 RespVO<()> 的 data 的 oneOf 第二项 {"default": null}）
+    if !obj.contains_key("type") && !obj.contains_key("$ref")
+        && !obj.contains_key("allOf") && !obj.contains_key("oneOf") && !obj.contains_key("anyOf")
+        && !obj.contains_key("nullable")
+    {
+        // 没有任何类型信息（如 {"default": null} 或空对象），视为无效标记
+        if obj.is_empty() || (obj.len() == 1 && obj.contains_key("default")) {
+            return true;
+        }
+    }
+    
+    false
 }
 
 /// 从 $ref 路径中提取 Schema 名称
@@ -680,6 +764,295 @@ mod tests {
         // $ref 类型
         let field_def = json!({"$ref": "#/components/schemas/User"});
         assert_eq!(extract_field_type(&field_def), Some("User".to_string()));
+    }
+
+    #[test]
+    fn test_extract_field_type_option_datetime() {
+        // Option<DateTime> → anyOf: [{type: string, format: date-time}, {nullable: true}]
+        let field_def = json!({
+            "anyOf": [
+                {"type": "string", "format": "date-time"},
+                {"nullable": true}
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("string(date-time)".to_string()));
+    }
+
+    #[test]
+    fn test_extract_field_type_option_i64() {
+        // Option<i64> → anyOf: [{type: integer, format: int64}, {nullable: true}]
+        let field_def = json!({
+            "anyOf": [
+                {"type": "integer", "format": "int64"},
+                {"nullable": true}
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("integer(int64)".to_string()));
+    }
+
+    #[test]
+    fn test_extract_field_type_option_string() {
+        // Option<String> → anyOf: [{type: string}, {nullable: true}]
+        let field_def = json!({
+            "anyOf": [
+                {"type": "string"},
+                {"nullable": true}
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("string".to_string()));
+    }
+
+    #[test]
+    fn test_extract_field_type_allof_ref() {
+        // allOf 包装的 $ref
+        let field_def = json!({
+            "allOf": [
+                {"$ref": "#/components/schemas/Address"}
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("Address".to_string()));
+    }
+
+    #[test]
+    fn test_extract_field_type_nullable_first() {
+        // nullable 标记在前，实际类型在后
+        let field_def = json!({
+            "anyOf": [
+                {"nullable": true},
+                {"type": "boolean"}
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("boolean".to_string()));
+    }
+
+    #[test]
+    fn test_extract_field_type_nested_combiner() {
+        // 嵌套的 allOf 内含 anyOf
+        let field_def = json!({
+            "allOf": [
+                {
+                    "anyOf": [
+                        {"type": "string", "format": "date-time"},
+                        {"nullable": true}
+                    ]
+                }
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("string(date-time)".to_string()));
+    }
+
+    #[test]
+    fn test_extract_field_type_option_ref() {
+        // Option<SomeType> → anyOf: [{$ref: ...}, {nullable: true}]
+        let field_def = json!({
+            "anyOf": [
+                {"$ref": "#/components/schemas/Department"},
+                {"nullable": true}
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("Department".to_string()));
+    }
+
+    #[test]
+    fn test_extract_field_type_option_array() {
+        // Option<Vec<String>> → anyOf: [{type: array, items: {type: string}}, {nullable: true}]
+        let field_def = json!({
+            "anyOf": [
+                {"type": "array", "items": {"type": "string"}},
+                {"nullable": true}
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("array<string>".to_string()));
+    }
+
+    #[test]
+    fn test_is_nullable_marker() {
+        // OpenAPI 3.0: 纯 nullable 标记
+        assert!(is_nullable_marker(&json!({"nullable": true})));
+        // 非 nullable
+        assert!(!is_nullable_marker(&json!({"nullable": false})));
+        // 带 type 的不是纯标记
+        assert!(!is_nullable_marker(&json!({"nullable": true, "type": "string"})));
+        // 非对象
+        assert!(!is_nullable_marker(&json!("string")));
+        // OpenAPI 3.1: {"type": "null"} 是 null 标记
+        assert!(is_nullable_marker(&json!({"type": "null"})));
+        // {"type": "string"} 不是 null 标记
+        assert!(!is_nullable_marker(&json!({"type": "string"})));
+        // {"default": null} 视为无效类型标记
+        assert!(is_nullable_marker(&json!({"default": null})));
+        // 空对象视为无效类型标记
+        assert!(is_nullable_marker(&json!({})));
+    }
+
+    // ========================================================================
+    // Salvo 实际生成的 OpenAPI 3.1 格式测试（基于真实 JSON 输出）
+    // ========================================================================
+
+    #[test]
+    fn test_type_array_option_string() {
+        // Salvo 对 Option<String> 生成: {"type": ["string", "null"]}
+        let field_def = json!({"type": ["string", "null"]});
+        assert_eq!(extract_field_type(&field_def), Some("string".to_string()));
+    }
+
+    #[test]
+    fn test_type_array_option_i64() {
+        // Salvo 对 Option<i64> 生成: {"type": ["integer", "null"], "format": "int64"}
+        let field_def = json!({"type": ["integer", "null"], "format": "int64"});
+        assert_eq!(extract_field_type(&field_def), Some("integer(int64)".to_string()));
+    }
+
+    #[test]
+    fn test_type_array_option_datetime() {
+        // Salvo 对 Option<DateTime> 生成: {"type": ["string", "null"], "format": "date-time"}
+        let field_def = json!({"type": ["string", "null"], "format": "date-time"});
+        assert_eq!(extract_field_type(&field_def), Some("string(date-time)".to_string()));
+    }
+
+    #[test]
+    fn test_type_array_option_i8() {
+        // Salvo 对 Option<i8> 生成: {"type": ["integer", "null"], "format": "int8"}
+        let field_def = json!({"type": ["integer", "null"], "format": "int8"});
+        assert_eq!(extract_field_type(&field_def), Some("integer(int8)".to_string()));
+    }
+
+    #[test]
+    fn test_type_array_option_bool() {
+        // Salvo 对 Option<bool> 生成: {"type": ["boolean", "null"]}
+        let field_def = json!({"type": ["boolean", "null"]});
+        assert_eq!(extract_field_type(&field_def), Some("boolean".to_string()));
+    }
+
+    #[test]
+    fn test_oneof_null_and_ref() {
+        // Salvo 对 RespVO<T>.data（Option<T> 引用类型）生成:
+        // {"oneOf": [{"type": "null"}, {"$ref": "#/components/schemas/Foo"}]}
+        let field_def = json!({
+            "oneOf": [
+                {"type": "null"},
+                {"$ref": "#/components/schemas/genies_auth_admin.domain.entity.role_entity.AdminRole"}
+            ]
+        });
+        assert_eq!(
+            extract_field_type(&field_def),
+            Some("genies_auth_admin.domain.entity.role_entity.AdminRole".to_string())
+        );
+    }
+
+    #[test]
+    fn test_oneof_null_and_array() {
+        // Salvo 对 RespVO<Vec<T>>.data（Option<Vec<T>>）生成:
+        // {"oneOf": [{"type": "null"}, {"type": "array", "items": {"$ref": "..."}}]}
+        let field_def = json!({
+            "oneOf": [
+                {"type": "null"},
+                {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/components/schemas/genies_auth_admin.domain.entity.user_entity.AdminUser"
+                    }
+                }
+            ]
+        });
+        assert_eq!(
+            extract_field_type(&field_def),
+            Some("array<genies_auth_admin.domain.entity.user_entity.AdminUser>".to_string())
+        );
+    }
+
+    #[test]
+    fn test_oneof_null_and_string() {
+        // Salvo 对 Option<String> 在某些上下文中使用 oneOf:
+        // {"oneOf": [{"type": "null"}, {"type": "string"}]}
+        let field_def = json!({
+            "oneOf": [
+                {"type": "null"},
+                {"type": "string"}
+            ]
+        });
+        assert_eq!(extract_field_type(&field_def), Some("string".to_string()));
+    }
+
+    #[test]
+    fn test_oneof_null_and_default_null() {
+        // Salvo 对 RespVO<()>.data 生成:
+        // {"oneOf": [{"type": "null"}, {"default": null}]}
+        let field_def = json!({
+            "oneOf": [
+                {"type": "null"},
+                {"default": null}
+            ]
+        });
+        // 两个元素都是 nullable 标记，返回 None（无有效类型）
+        assert_eq!(extract_field_type(&field_def), None);
+    }
+
+    #[test]
+    fn test_real_admin_department_schema() {
+        // 使用 AdminDepartment 的真实 Schema 结构测试 extract_schema_fields
+        let schema = json!({
+            "properties": {
+                "created_at": {"format": "date-time", "type": ["string", "null"]},
+                "description": {"type": ["string", "null"]},
+                "id": {"format": "int64", "type": ["integer", "null"]},
+                "name": {"type": "string"},
+                "parent_id": {"format": "int64", "type": ["integer", "null"]},
+                "sort_order": {"format": "int32", "type": "integer"},
+                "status": {"format": "int8", "type": "integer"},
+                "updated_at": {"format": "date-time", "type": ["string", "null"]}
+            },
+            "required": ["name", "sort_order", "status"],
+            "type": "object"
+        });
+
+        let fields = extract_schema_fields(&schema);
+        assert_eq!(fields.len(), 8);
+
+        // 验证 Option 字段正确提取了类型
+        let find_field = |name: &str| -> Option<String> {
+            fields.iter().find(|(n, _, _)| n == name).and_then(|(_, t, _)| t.clone())
+        };
+        assert_eq!(find_field("created_at"), Some("string(date-time)".to_string()));
+        assert_eq!(find_field("description"), Some("string".to_string()));
+        assert_eq!(find_field("id"), Some("integer(int64)".to_string()));
+        assert_eq!(find_field("name"), Some("string".to_string()));
+        assert_eq!(find_field("parent_id"), Some("integer(int64)".to_string()));
+        assert_eq!(find_field("sort_order"), Some("integer(int32)".to_string()));
+        assert_eq!(find_field("status"), Some("integer(int8)".to_string()));
+        assert_eq!(find_field("updated_at"), Some("string(date-time)".to_string()));
+    }
+
+    #[test]
+    fn test_real_respvo_schema() {
+        // 使用 RespVO<AdminRole> 的真实 Schema 结构测试
+        let schema = json!({
+            "description": "http接口返回模型结构",
+            "properties": {
+                "code": {"type": ["string", "null"]},
+                "data": {
+                    "oneOf": [
+                        {"type": "null"},
+                        {"$ref": "#/components/schemas/genies_auth_admin.domain.entity.role_entity.AdminRole"}
+                    ]
+                },
+                "msg": {"type": ["string", "null"]}
+            },
+            "type": "object"
+        });
+
+        let fields = extract_schema_fields(&schema);
+        assert_eq!(fields.len(), 3);
+
+        let find_field = |name: &str| -> Option<String> {
+            fields.iter().find(|(n, _, _)| n == name).and_then(|(_, t, _)| t.clone())
+        };
+        assert_eq!(find_field("code"), Some("string".to_string()));
+        assert_eq!(find_field("msg"), Some("string".to_string()));
+        assert_eq!(
+            find_field("data"),
+            Some("genies_auth_admin.domain.entity.role_entity.AdminRole".to_string())
+        );
     }
 
     #[test]

@@ -188,14 +188,18 @@ const userRoles = ref<any[]>([])
 async function openRoleDialog(row: UserRecord) {
   roleUserId.value = row.id
   roleUserName.value = row.display_name
-  roleVisible.value = true
-  const [roles, uRoles] = await Promise.all([getRoles(), getUserRoles(row.id)])
-  allRoles.value = roles
-  userRoles.value = uRoles
+  try {
+    const [roles, uRoles] = await Promise.all([getRoles(), getUserRoles(row.id)])
+    allRoles.value = roles
+    userRoles.value = uRoles
+    roleVisible.value = true
+  } catch (e: any) {
+    ElMessage.error('加载角色失败: ' + (e.message || e))
+  }
 }
 
 function isRoleAssigned(roleId: number): boolean {
-  return userRoles.value.some((r: any) => r.role_id === roleId || r.id === roleId)
+  return userRoles.value.some((r: any) => r.id === roleId)
 }
 
 async function toggleRole(role: any) {
@@ -236,7 +240,6 @@ function buildDeptTree(list: DepartmentRecord[], parentId: number = 0): any[] {
 async function openDeptDialog(row: UserRecord) {
   deptUserId.value = row.id
   deptUserName.value = row.display_name
-  deptVisible.value = true
   deptLoading.value = true
   try {
     const [allDepts, userDepts] = await Promise.all([
@@ -245,6 +248,7 @@ async function openDeptDialog(row: UserRecord) {
     ])
     deptTreeData.value = buildDeptTree(allDepts)
     deptCheckedKeys.value = userDepts.map(d => d.id)
+    deptVisible.value = true
   } catch (e: any) {
     ElMessage.error(e.message || '加载部门信息失败')
   } finally {
@@ -368,7 +372,7 @@ async function handleSaveDepts() {
 
     <!-- 角色管理弹窗 -->
     <el-dialog v-model="roleVisible" :title="`角色分配 - ${roleUserName}`" width="500px">
-      <el-checkbox-group v-if="allRoles.length > 0">
+      <div v-if="allRoles.length > 0">
         <div v-for="role in allRoles" :key="role.id" style="margin-bottom: 12px;">
           <el-checkbox
             :model-value="isRoleAssigned(role.id)"
@@ -380,7 +384,7 @@ async function handleSaveDepts() {
             </span>
           </el-checkbox>
         </div>
-      </el-checkbox-group>
+      </div>
       <el-empty v-else description="暂无可用角色" />
     </el-dialog>
 

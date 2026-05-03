@@ -12,6 +12,7 @@ use crate::domain::entity::role_entity::AdminRole;
 // AdminUser Repository
 // ============================================================================
 
+#[allow(clippy::too_many_arguments)]
 impl AdminUser {
     #[py_sql("INSERT INTO auth_admin_users (username, password_hash, display_name, email, phone, avatar, status) VALUES (#{username}, #{password_hash}, #{display_name}, #{email}, #{phone}, #{avatar}, #{status})")]
     pub async fn create_user(

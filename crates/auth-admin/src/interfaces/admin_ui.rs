@@ -82,12 +82,10 @@ async fn serve_admin_ui_entry(req: &mut Request, res: &mut Response) {
     let path = req.uri().path().to_string();
     if !path.ends_with('/') {
         res.render(Redirect::other(format!("{}/", path)));
+    } else if let Some(index) = AdminUiAssets::get("index.html") {
+        serve_embedded_file(res, "index.html", &index.data);
     } else {
-        if let Some(index) = AdminUiAssets::get("index.html") {
-            serve_embedded_file(res, "index.html", &index.data);
-        } else {
-            res.status_code(StatusCode::NOT_FOUND);
-            res.render(Text::Plain("404 Not Found"));
-        }
+        res.status_code(StatusCode::NOT_FOUND);
+        res.render(Text::Plain("404 Not Found"));
     }
 }

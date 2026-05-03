@@ -65,7 +65,7 @@ pub struct JWTToken {
 }
 
 /// auth-admin 签发的本地 JWT Claims 格式
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct LocalTokenClaims {
     pub sub: String,
     pub uid: Option<i64>,
@@ -78,14 +78,14 @@ impl JWTToken {
     /// create token
     /// secret: your secret string
     pub fn create_token(&self, secret: &str) -> Result<String,  crate::error::Error> {
-        return match encode(
+        match encode(
             &Header::default(),
             self,
             &EncodingKey::from_secret(secret.as_ref()),
         ) {
             Ok(t) => Ok(t),
             Err(_) => Err(Error::from("JWTToken encode fail!")), // in practice you would return the error
-        };
+        }
     }
     /// verify token invalid
     /// secret: your secret string
@@ -93,18 +93,18 @@ impl JWTToken {
         let validation = Validation {
             ..Validation::default()
         };
-        return match decode::<JWTToken>(
-            &token,
+        match decode::<JWTToken>(
+            token,
             &DecodingKey::from_secret(secret.as_ref()),
             &validation,
         ) {
             Ok(c) => Ok(c.claims),
             Err(err) => match *err.kind() {
-                ErrorKind::InvalidToken => return Err(Error::from("InvalidToken")), // Example on how to handle a specific error
-                ErrorKind::InvalidIssuer => return Err(Error::from("InvalidIssuer")), // Example on how to handle a specific error
-                _ => return Err(Error::from("InvalidToken other errors")),
+                ErrorKind::InvalidToken => Err(Error::from("InvalidToken")), // Example on how to handle a specific error
+                ErrorKind::InvalidIssuer => Err(Error::from("InvalidIssuer")), // Example on how to handle a specific error
+                _ => Err(Error::from("InvalidToken other errors")),
             },
-        };
+        }
     }
  // 从keycloak 服务中读取相关的加密算法，和相关的key 然后进行解密验证
     pub fn verify_with_keycloak(keycloak: &Keys, token: &str) -> Result<JWTToken,  crate::error::Error> {
@@ -113,21 +113,21 @@ impl JWTToken {
         // let kty = keycloak.keys[0].kty.as_ref().unwrap();
         let alg = keycloak.keys[0].alg.as_ref().unwrap();
 
-        let algorithm = Algorithm::from_str(&alg).unwrap();
+        let algorithm = Algorithm::from_str(alg).unwrap();
 
         let validation = Validation::new(algorithm);
 
         let jwt_token =
-            decode::<JWTToken>(&token, &DecodingKey::from_rsa_components(n, e), &validation);
+            decode::<JWTToken>(token, &DecodingKey::from_rsa_components(n, e), &validation);
 
-        return match jwt_token {
+        match jwt_token {
             Ok(c) => Ok(c.claims),
             Err(err) => match *err.kind() {
-                ErrorKind::InvalidToken => return Err(Error::from("InvalidToken")), // Example on how to handle a specific error
-                ErrorKind::InvalidIssuer => return Err(Error::from("InvalidIssuer")), // Example on how to handle a specific error
-                _ => return Err(Error::from("InvalidToken other errors")),
+                ErrorKind::InvalidToken => Err(Error::from("InvalidToken")), // Example on how to handle a specific error
+                ErrorKind::InvalidIssuer => Err(Error::from("InvalidIssuer")), // Example on how to handle a specific error
+                _ => Err(Error::from("InvalidToken other errors")),
             },
-        };
+        }
     }
 
     /// 使用本地密钥验证 auth-admin 签发的 JWT Token
@@ -259,4 +259,28 @@ pub async fn get_temp_access_token(
     access_token
         .access_token
         .ok_or_else(|| Error::from("Access token is missing in response"))
+}
+
+/// 使用 jwt_secret 本地生成服务 JWT（auth_mode="local" 时使用）
+/// 供 #[remote] 宏在 local 模式下获取/刷新 service account token
+pub async fn get_local_service_token(jwt_secret: &str) -> Result<String, Error> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as usize;
+
+    let claims = LocalTokenClaims {
+        sub: "service-account".to_string(),
+        uid: None,
+        name: Some("remote-service".to_string()),
+        iat: now,
+        exp: now + 3600, // 1小时有效期
+    };
+
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(jwt_secret.as_bytes()),
+    )
+    .map_err(|e| Error::from(format!("Failed to generate local service token: {}", e)))
 }

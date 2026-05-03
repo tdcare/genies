@@ -39,25 +39,25 @@ impl From<io::Error> for Error {
 
 impl From<&str> for Error {
     fn from(arg: &str) -> Self {
-        return Error::E(arg.to_string());
+        Error::E(arg.to_string())
     }
 }
 
 impl From<std::string::String> for Error {
     fn from(arg: String) -> Self {
-        return Error::E(arg);
+        Error::E(arg)
     }
 }
 
 impl From<&dyn std::error::Error> for Error {
     fn from(arg: &dyn std::error::Error) -> Self {
-        return Error::E(arg.to_string());
+        Error::E(arg.to_string())
     }
 }
 
 impl From<Error> for std::io::Error {
     fn from(arg: Error) -> Self {
-        arg.into()
+        std::io::Error::other(arg.to_string())
     }
 }
 
@@ -129,7 +129,7 @@ impl<'de> Deserialize<'de> for Error {
         D: Deserializer<'de>,
     {
         let r = deserializer.deserialize_string(ErrorVisitor)?;
-        return Ok(Error::from(r));
+        Ok(Error::from(r))
     }
 }
 

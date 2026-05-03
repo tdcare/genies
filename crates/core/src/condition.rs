@@ -33,16 +33,14 @@ pub fn obj_test(obj_value:&Value,tree:&ConditionTree)->bool{
         }
     };
 
-   let result = if operator.eq("and"){
+   if operator.eq("and"){
        operator_and(obj_value,tree)
    }else if operator.eq("or") {
        operator_or(obj_value,tree)
    }else {
        compare(obj_value,tree,&operator)
-   };
-    return result;
+   }
 }
-
 
 fn operator_and(obj_value:&Value,tree:&ConditionTree) ->bool{
     let mut result = true;
@@ -53,7 +51,7 @@ fn operator_and(obj_value:&Value,tree:&ConditionTree) ->bool{
             break;
         }
     }
-   return result;
+   result
 }
 fn operator_or(obj_value:&Value,tree:&ConditionTree) ->bool{
     let mut result = false;
@@ -64,7 +62,7 @@ fn operator_or(obj_value:&Value,tree:&ConditionTree) ->bool{
             break;
         }
     }
-    return result;
+    result
 }
 fn compare(obj_value:&Value,tree:&ConditionTree,operator:&str)->bool{
     let mut result = false;
@@ -87,14 +85,14 @@ fn compare(obj_value:&Value,tree:&ConditionTree,operator:&str)->bool{
         if operator.starts_with("arr_size_"){
              let obj_p=json!(property_value_vec.len());
              let op=&operator[9..operator.len()];
-             result=compare_left_right(&op,&obj_p,&tree_value)
-        }else if property_value_vec.len()>0 {
+             result=compare_left_right(op,&obj_p,&tree_value)
+        }else if !property_value_vec.is_empty() {
             if operator.starts_with("arr_exist_") {
                 for i in 0..property_value_vec.len()-1 {
                     let pointer_string = format!("/{}/{}/{}", property_names[0], i, property_names[1]);
                     let obj_p=obj_value.pointer(&pointer_string).unwrap();
                     let op=&operator[10..operator.len()];
-                    if compare_left_right(&op, obj_p, &tree_value) {
+                    if compare_left_right(op, obj_p, &tree_value) {
                         result=true;
                         break
                     }
@@ -105,7 +103,7 @@ fn compare(obj_value:&Value,tree:&ConditionTree,operator:&str)->bool{
                     let pointer_string = format!("/{}/{}/{}", property_names[0], i, property_names[1]);
                     let obj_p=obj_value.pointer(&pointer_string).unwrap();
                     let op=&operator[9..operator.len()];
-                    if !compare_left_right(&op, obj_p, &tree_value) {
+                    if !compare_left_right(op, obj_p, &tree_value) {
                         result=false;
                         break
                     }
@@ -116,7 +114,7 @@ fn compare(obj_value:&Value,tree:&ConditionTree,operator:&str)->bool{
         }
     }
 
-    return result;
+    result
 }
 fn compare_left_right( operator:&str,   left:&Value,  right:&str)->bool{
    let mut result=false;
@@ -128,10 +126,10 @@ fn compare_left_right( operator:&str,   left:&Value,  right:&str)->bool{
                result=left_val.eq(right_val);
            },
            "<>"=>{
-               result=!left_val.eq(right_val);
+               result = !left_val.eq(right_val);
            },
            "!="=>{
-               result=!left_val.eq(right_val);
+               result = !left_val.eq(right_val);
            },
            "contain"=>{
              result= left_val.contains(right_val);
@@ -210,7 +208,7 @@ fn compare_left_right( operator:&str,   left:&Value,  right:&str)->bool{
     }
 
 
-    return result;
+    result
 }
 
 

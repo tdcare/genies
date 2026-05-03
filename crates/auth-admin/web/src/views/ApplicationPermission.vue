@@ -334,6 +334,53 @@ function expandAll() { activeNames.value = groupedSchemas.value.map(g => g.schem
 function collapseAll() { activeNames.value = [] }
 
 // ============================================================================
+// 类型显示与导航辅助
+// ============================================================================
+
+/** 判断类型名是否为可导航的 Schema 引用（包含 `.` 的完整限定名） */
+function isNavigableType(typeName: string): boolean {
+  return typeName.includes('.')
+}
+
+/**
+ * 解析 field_type 字符串，返回结构化的类型片段列表。
+ * 支持格式：
+ *   - 基本类型: "string", "integer(int64)", "string(date-time)"
+ *   - 引用类型: "genies_auth_admin.dto.SomeType"
+ *   - 数组类型: "array<genies_auth_admin.dto.SomeType>", "array<string>"
+ */
+interface TypeSegment {
+  text: string
+  navigable: boolean
+  schemaName?: string  // 可导航时的 schema 名称
+}
+
+function parseFieldType(fieldType: string | undefined | null): TypeSegment[] {
+  if (!fieldType) return [{ text: '-', navigable: false }]
+
+  // 处理 array<xxx> 格式
+  const arrayMatch = fieldType.match(/^array<(.+)>$/)
+  if (arrayMatch) {
+    const inner = arrayMatch[1]
+    const segments: TypeSegment[] = [{ text: 'array<', navigable: false }]
+    if (isNavigableType(inner)) {
+      segments.push({ text: inner, navigable: true, schemaName: inner })
+    } else {
+      segments.push({ text: inner, navigable: false })
+    }
+    segments.push({ text: '>', navigable: false })
+    return segments
+  }
+
+  // 普通类型
+  if (isNavigableType(fieldType)) {
+    return [{ text: fieldType, navigable: true, schemaName: fieldType }]
+  }
+
+  return [{ text: fieldType, navigable: false }]
+}
+
+// ============================================================================
 // Tab 3: 策略管理
 // ============================================================================
 
@@ -668,8 +715,15 @@ async function loadAdminUsersAndRoles() {
               </div>
               <el-table :data="group.fields" border size="small" class="fields-table">
                 <el-table-column prop="field_name" label="字段名" width="150" />
-                <el-table-column prop="field_type" label="类型" width="100">
-                  <template #default="{ row }"><el-tag size="small">{{ row.field_type || '-' }}</el-tag></template>
+                <el-table-column prop="field_type" label="类型" min-width="120">
+                  <template #default="{ row }">
+                    <span class="field-type-cell">
+                      <template v-for="(seg, idx) in parseFieldType(row.field_type)" :key="idx">
+                        <span v-if="seg.navigable" class="type-link" @click.stop="navigateToSchema(seg.schemaName!)">{{ seg.text }}</span>
+                        <span v-else :class="{ 'type-placeholder': seg.text === '-' }">{{ seg.text }}</span>
+                      </template>
+                    </span>
+                  </template>
                 </el-table-column>
                 <el-table-column prop="field_label" label="标签" width="120" />
                 <el-table-column prop="field_description" label="描述" min-width="200" />
@@ -967,6 +1021,12 @@ async function loadAdminUsersAndRoles() {
 .endpoint-link { font-family: monospace; font-size: 12px; color: #409eff; cursor: pointer; padding: 4px 8px; background: #ecf5ff; border-radius: 4px; transition: all 0.2s; }
 .endpoint-link:hover { background: #409eff; color: #fff; }
 .fields-table { margin-top: 10px; }
+
+/* 类型列 */
+.field-type-cell { font-family: monospace; font-size: 12px; color: #606266; }
+.type-link { color: #409eff; cursor: pointer; transition: color 0.2s; }
+.type-link:hover { color: #66b1ff; text-decoration: underline; }
+.type-placeholder { color: #c0c4cc; }
 
 /* 权限列 */
 .permission-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

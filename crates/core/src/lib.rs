@@ -147,12 +147,12 @@ where
 
 }
 
-impl<T> ToString for RespVO<T>
+impl<T> std::fmt::Display for RespVO<T>
 where
     T: Serialize + DeserializeOwned + Clone,
 {
-    fn to_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).unwrap())
     }
 }
 
@@ -170,11 +170,7 @@ impl<T> Writer for ResultDTO<T>
 {
     async fn write(mut self, _req: &mut Request, _depot: &mut Depot, res: &mut Response) {
         res.headers_mut().insert("Content-Type", "text/json;charset=UTF-8".parse().unwrap());
-        match self.status {
-            _=>{
-                res.render(self.to_string());
-            }
-        }
+        res.render(self.to_string());
     }
 }
 
@@ -246,7 +242,7 @@ where
 
     pub fn resp_json(&self) -> Self {
         Self {
-            status: self.status.clone(),
+            status: self.status,
             data: self.data.clone(),
             message: self.message.clone()
         }
@@ -315,12 +311,12 @@ where
 
 }
 
-impl<T> ToString for ResultDTO<T>
+impl<T> std::fmt::Display for ResultDTO<T>
 where
     T: Serialize + DeserializeOwned + Clone,
 {
-    fn to_string(&self) -> String {
-        serde_json::to_string(self).unwrap()
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", serde_json::to_string(self).unwrap())
     }
 }
 //
