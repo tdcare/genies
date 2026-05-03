@@ -66,6 +66,18 @@ pub struct ApplicationConfig {
     pub keycloak_resource: String,
     pub keycloak_credentials_secret: String,
 
+    /// 认证模式: "keycloak" | "local"，默认 keycloak
+    #[serde(default = "default_auth_mode")]
+    pub auth_mode: String,
+
+    /// JWT 密钥（auth_mode 为 "local" 时必填）
+    #[serde(default)]
+    pub jwt_secret: String,
+
+    /// auth-admin 服务地址（用于向 auth-admin 发起内部调用）
+    #[serde(default)]
+    pub auth_admin_url: String,
+
     // /// dapr http 端口
     // pub dapr_http_port: i64,
     // pub dapr_http: String,
@@ -75,7 +87,9 @@ pub struct ApplicationConfig {
     pub dapr_pub_message_limit: i64,
     pub dapr_cdc_message_period: i64,
     /// 事件消费 参数
+    #[serde(default)]
     pub processing_expire_seconds: i64,
+    #[serde(default)]
     pub record_reserve_minutes: i64,
     /// 雪花算法机器ID（可选，不配置时自动从 Redis/HOSTNAME 获取）
     pub machine_id: Option<i64>,
@@ -86,5 +100,6 @@ pub struct ApplicationConfig {
     // pub test_string:Option<String>,
 }
 
-
-
+fn default_auth_mode() -> String {
+    "keycloak".to_string()
+}

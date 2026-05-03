@@ -365,6 +365,7 @@ pub struct User {
 
 ```rust
 impl User {
+    /// 对 JSON Value 树进行递归字段权限过滤
     pub fn casbin_filter(
         value: &mut serde_json::Value,
         enforcer: &casbin::Enforcer,
@@ -373,9 +374,50 @@ impl User {
 }
 
 impl salvo::writing::Writer for User {
-    // 从 Depot 提取 enforcer/subject，过滤后渲染
+    // 从 Depot 提取 enforcer/subject，过滤后渲染 JSON 响应
 }
 ```
+
+**`casbin_filter` 方法签名：**
+```rust
+pub fn casbin_filter(value: &mut serde_json::Value, enforcer: &casbin::Enforcer, subject: &str)
+```
+- `value` — 待过滤的 JSON Value（会被原地修改，deny 的字段被移除）
+- `enforcer` — Casbin Enforcer 引用
+- `subject` — 当前用户标识（对应 casbin_rules 中的 v0）
+
+### ⚠️ 与 RespVO 配合使用
+
+`Writer` trait 只在 handler **直接返回** `Json<T>` 或 `T` 时自动触发。当返回 `Json<RespVO<T>>` 时，`RespVO` 的 Writer 接管序列化，`T` 的 Writer **不会被调用**，字段过滤不会自动生效。
+
+**手动调用模式：**
+
+```rust
+use salvo::prelude::*;
+use genies_core::RespVO;
+
+#[endpoint]
+async fn get_user(depot: &mut Depot) -> Json<RespVO<User>> {
+    let user = fetch_user().await;
+
+    // 从 Depot 获取 enforcer 和 subject（由 casbin_auth 中间件注入）
+    let enforcer = depot.obtain::<std::sync::Arc<casbin::Enforcer>>().ok();
+    let subject = depot.get::<String>("subject").ok();
+
+    // 手动调用 casbin_filter
+    let mut value = serde_json::to_value(&user).unwrap();
+    if let (Some(e), Some(s)) = (&enforcer, &subject) {
+        User::casbin_filter(&mut value, e.as_ref(), s.as_str());
+    }
+    let filtered: User = serde_json::from_value(value).unwrap();
+
+    Json(RespVO::from(&Ok::<_, String>(filtered)))
+}
+```
+
+**参数类型转换：**
+- `e.as_ref()` — `Arc<Enforcer>` → `&Enforcer`
+- `s.as_str()` — `String` → `&str`
 
 ### Policy Examples
 

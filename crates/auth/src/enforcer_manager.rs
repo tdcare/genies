@@ -44,6 +44,19 @@ pub struct EnforcerManager {
 }
 
 impl EnforcerManager {
+    /// 创建空的 Enforcer 管理器（降级模式）
+    ///
+    /// 当数据库不可用时作为 fallback，使用最小化模型，默认拒绝所有请求。
+    pub async fn empty() -> Self {
+        let model_text = "[request_definition]\nr = sub, obj, act\n[policy_definition]\np = sub, obj, act\n[role_definition]\ng = _, _\n[policy_effect]\ne = some(where (p.eft == allow))\n[matchers]\nm = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act";
+        let model = DefaultModel::from_str(model_text).await.expect("内置模型解析不应失败");
+        let adapter = casbin::MemoryAdapter::default();
+        let enforcer = Enforcer::new(model, adapter).await.expect("内置 Enforcer 创建不应失败");
+        Self {
+            enforcer: RwLock::new(Arc::new(enforcer)),
+        }
+    }
+
     /// 初始化 Enforcer 管理器
     ///
     /// 从数据库加载 Casbin 模型和策略，创建 Enforcer 实例。

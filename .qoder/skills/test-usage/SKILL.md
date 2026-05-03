@@ -424,6 +424,13 @@ genies_test 本身仅使用以下环境变量：
 
 > 业务特定环境变量（如 `JAVA_BASE_URL`、`RUST_BASE_URL`、`TEST_DATABASE_URL`、`TEST_DEPT_ID` 等）应在各项目的测试模块中处理。
 
+## 迁移注意事项
+
+1. **genies_test 只提供通用工具**：业务配置（服务 URL、数据库连接、测试 ID 等）需在各项目的 `tests/common/mod.rs` 中自行定义。
+2. **RBatis 由业务项目负责初始化**：`db_snapshot`/`db_diff`/`db_restore` 需要调用方传入 `&RBatis` 实例，genies_test 不管理数据库连接。
+3. **JSON 数组排序**：对比测试前建议对 JSON 数组按 key 排序（如 sickbed 示例中的 `sort_json_arrays`），避免数组元素顺序不一致导致误报。
+4. **统一导出**：建议在 `tests/common/mod.rs` 中 `pub use genies_test::*;` 统一导出，然后在同一文件中添加业务特定函数。
+
 ## 与其他 Crate 集成
 
 | Crate | 集成方式 |
@@ -444,6 +451,50 @@ serde_json = "1"
 ```
 
 ```rust
+// examples/sickbed/tests/common/mod.rs
+pub use genies_test::*;                          // 统一导出通用工具
+
+use rbatis::RBatis;
+use rbdc_mysql::MysqlDriver;
+
+// ===== 业务特定配置 =====
+pub fn java_base_url() -> String {
+    std::env::var("JAVA_BASE_URL").unwrap_or_else(|_| "http://localhost:8080/sickbed".into())
+}
+pub fn rust_base_url() -> String {
+    std::env::var("RUST_BASE_URL").unwrap_or_else(|_| "http://localhost:8081/sickbed".into())
+}
+pub fn test_dept_id() -> String {
+    std::env::var("TEST_DEPT_ID").unwrap_or_else(|_| "some-uuid".into())
+}
+pub fn database_url() -> String {
+    std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| "mysql://user:pass@host/db".into())
+}
+pub async fn init_test_rbatis() -> RBatis {
+    let rb = RBatis::new();
+    rb.init(MysqlDriver {}, &database_url()).unwrap();
+    rb
+}
+
+/// 对 JSON 数组按指定 key 排序（避免顺序差异导致误报）
+pub fn sort_json_arrays(value: &mut serde_json::Value, sort_key: &str) {
+    match value {
+        serde_json::Value::Array(arr) => {
+            arr.sort_by(|a, b| {
+                let ak = a.get(sort_key).and_then(|v| v.as_str()).unwrap_or("");
+                let bk = b.get(sort_key).and_then(|v| v.as_str()).unwrap_or("");
+                ak.cmp(bk)
+            });
+        }
+        serde_json::Value::Object(map) => {
+            for (_, v) in map.iter_mut() { sort_json_arrays(v, sort_key); }
+        }
+        _ => {}
+    }
+}
+```
+
+```rust
 // examples/sickbed/tests/sickbed_comparison_tests.rs
 mod common;
 use common::*;
@@ -451,9 +502,21 @@ use common::*;
 #[tokio::test]
 async fn test_sickbed_list() {
     let client = http_client();
-    // java_base_url() / rust_base_url() / test_dept_id() 等
-    // 来自 common/mod.rs 中的业务特定定义
-    // ...
+    let dept_id = test_dept_id();
+
+    let mut java_resp: serde_json::Value = client
+        .get(format!("{}/list?deptId={}", java_base_url(), dept_id))
+        .send().await.unwrap().json().await.unwrap();
+    let mut rust_resp: serde_json::Value = client
+        .get(format!("{}/list?deptId={}", rust_base_url(), dept_id))
+        .send().await.unwrap().json().await.unwrap();
+
+    // 排序数组，避免顺序差异
+    sort_json_arrays(&mut java_resp, "id");
+    sort_json_arrays(&mut rust_resp, "id");
+
+    let diffs = deep_diff("sickbed/list", &java_resp, &rust_resp);
+    assert_no_significant_diffs("sickbed/list", &diffs);
 }
 ```
 

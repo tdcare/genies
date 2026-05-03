@@ -88,7 +88,7 @@ use genies_test::mutation::{
 let _lock = DB_MUTATION_LOCK.lock().await;
 
 // 对比两组 DbChange 向量
-compare_db_changes("operation", &java_changes, &rust_changes, &dynamic_fields);
+let diffs = compare_db_changes(&java_changes, &rust_changes, &dynamic_fields);
 
 // 完整的 8 步 mutation 对比测试
 test_mutation_with_db_diff(
@@ -226,6 +226,68 @@ async fn compare_with_tolerance() {
 - **serde_json** — JSON 序列化与对比
 - **tokio** — 异步运行时
 - **rbs** — RBatis 序列化辅助
+
+## 集成指南
+
+### 迁移注意事项
+
+1. **genies_test 只提供通用工具** — 业务配置（服务 URL、数据库连接、测试 ID、cleanup 函数）需在各项目的 `tests/common/mod.rs` 中自行定义。
+2. **RBatis 由业务项目负责初始化** — `db_snapshot`/`db_diff`/`db_restore` 需要调用方传入 `&RBatis` 实例，genies_test 不管理数据库连接。
+3. **对比前排序 JSON 数组** — 为避免数组元素顺序不一致导致误报，建议在调用 `deep_diff` 前按 key 排序数组（如 `sort_json_arrays`）。
+4. **统一导出模式** — 在 `tests/common/mod.rs` 中 `pub use genies_test::*;` 统一导出通用工具，然后在同一文件中添加业务特定函数。
+
+### 项目集成示例
+
+```toml
+# Cargo.toml
+[dev-dependencies]
+genies_test = { path = "../../crates/test" }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+rbatis = "4"
+rbdc-mysql = "4"
+```
+
+```rust
+// tests/common/mod.rs
+pub use genies_test::*;
+
+use rbatis::RBatis;
+use rbdc_mysql::MysqlDriver;
+
+// 业务特定配置
+pub fn java_base_url() -> String {
+    std::env::var("JAVA_BASE_URL").unwrap_or_else(|_| "http://localhost:8080/api".into())
+}
+pub fn rust_base_url() -> String {
+    std::env::var("RUST_BASE_URL").unwrap_or_else(|_| "http://localhost:8081/api".into())
+}
+pub fn database_url() -> String {
+    std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| "mysql://user:pass@host/db".into())
+}
+pub async fn init_test_rbatis() -> RBatis {
+    let rb = RBatis::new();
+    rb.init(MysqlDriver {}, &database_url()).unwrap();
+    rb
+}
+
+/// 对 JSON 数组按指定 key 排序（避免顺序差异导致误报）
+pub fn sort_json_arrays(value: &mut serde_json::Value, sort_key: &str) {
+    match value {
+        serde_json::Value::Array(arr) => {
+            arr.sort_by(|a, b| {
+                let ak = a.get(sort_key).and_then(|v| v.as_str()).unwrap_or("");
+                let bk = b.get(sort_key).and_then(|v| v.as_str()).unwrap_or("");
+                ak.cmp(bk)
+            });
+        }
+        serde_json::Value::Object(map) => {
+            for (_, v) in map.iter_mut() { sort_json_arrays(v, sort_key); }
+        }
+        _ => {}
+    }
+}
+```
 
 ## 与其他 Crate 的关系
 

@@ -266,16 +266,16 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
 
                         // redis 消费状态更新成功了，才提交数据库事务
                         if set_CONSUMED.is_ok(){
-                            tx.commit().await;
+                            let _ = tx.commit().await;
                         }else {
                             // redis 消费状态更新失败了，数据库事务rollback，让dapr 重发消息
-                            tx.rollback().await;
+                            let _ = tx.rollback().await;
                            _depot.insert("is_retry", "true");
                         }
                     }else {
                         // 如果事件处理程序处理失败
-                        tx.rollback().await;
-                        genies::context::CONTEXT.redis_save_service.del_string(&key).await;
+                        let _ = tx.rollback().await;
+                        let _ = genies::context::CONTEXT.redis_save_service.del_string(&key).await;
                         _depot.insert("is_retry", "true");
                     }
                 } else {
@@ -285,11 +285,11 @@ pub(crate) fn impl_topic(target_fn: &ItemFn, args: &AttributeArgs) -> TokenStrea
                     
                     if v.eq(&CONSUME_STATUS_CONSUMED) {
                         // 已经消费完成，跳过
-                        tx.rollback().await;
+                        let _ = tx.rollback().await;
                         log::debug!("2事件已完成,key={}",key);
                     } else {
                         // 正在被其他实例消费中，或其他情况，设置重试
-                        tx.rollback().await;
+                        let _ = tx.rollback().await;
                         _depot.insert("is_retry", "true");
                         log::debug!("1事件正在处理中，事件将进行重发，key={}",key);
                     }

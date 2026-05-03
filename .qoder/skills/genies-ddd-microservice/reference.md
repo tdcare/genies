@@ -483,7 +483,7 @@ INSERT INTO casbin_rules (ptype,v0,v1) VALUES ('g','alice','admin');
 ```rust
 use genies::context::CONTEXT;
 use genies_auth::{
-    auth_admin_router, auth_admin_ui_router, auth_public_router,
+    auth_admin_router, auth_public_router,
     casbin_auth, extract_and_sync_schemas, EnforcerManager,
 };
 use salvo::prelude::*;
@@ -518,7 +518,6 @@ async fn main() {
     // 6. 组装完整路由
     let router = Router::new()
         .push(protected_router)
-        .push(auth_admin_ui_router())       // Auth Admin UI
         .push(auth_public_router())         // 公开 Token 端点
         .push(genies::k8s::k8s_health_check())  // K8s 探针
         .push(genies::dapr_event_router()); // Dapr 事件路由

@@ -22,7 +22,8 @@ description: Guide for using the Genies Rust microservice framework with DDD and
 | `genies_dapr` | 1.4.2 | Dapr 集成：CloudEvent、PubSub、Topic 自动收集 |
 | `genies_ddd` | 1.4.2 | DDD 核心：聚合根、领域事件、消息发布 |
 | `genies_k8s` | 1.4.2 | Kubernetes 探针：存活/就绪检查 |
-| `genies_auth` | 1.4.2 | Casbin 权限：API 访问控制、字段级过滤、Admin UI |
+| `genies_auth` | 1.4.2 | Casbin 权限：API 访问控制、字段级过滤、Admin API |
+| `genies_auth_admin` | - | 独立的权限管理 Web 界面（从 genies_auth 迁移） |
 
 ## 2. 快速引用
 
@@ -277,13 +278,54 @@ async fn get_employee() -> Employee {
 2. **`Writer` trait 实现** — 在 HTTP 响应序列化时自动应用权限过滤
 3. **自动嵌套检测** — 非原始类型字段自动递归过滤（无需 `#[casbin(nested)]`）
 
+**`casbin_filter` 方法签名：**
+```rust
+pub fn casbin_filter(value: &mut serde_json::Value, enforcer: &casbin::Enforcer, subject: &str)
+```
+
 **原始类型白名单**（这些类型不会递归）：
 ```
 i8, i16, i32, i64, i128, u8, u16, u32, u64, u128, f32, f64,
 isize, usize, String, str, bool, char
 ```
 
-### 9.3 中间件配置
+### 9.3 ⚠️ RespVO 包装时的字段过滤限制
+
+`#[casbin]` 生成的 `Writer` 实现**只在 handler 直接返回 `Json<T>` 或 `T` 时自动触发字段过滤**。当返回 `Json<RespVO<T>>` 时，`RespVO` 的 Writer 接管序列化，**不会**自动调用内层类型 `T` 的字段过滤。
+
+**手动调用 `casbin_filter` 的代码模板：**
+
+```rust
+use salvo::prelude::*;
+use genies_core::RespVO;
+
+#[endpoint]
+async fn get_employee(depot: &mut Depot) -> Json<RespVO<Employee>> {
+    let employee = fetch_employee().await;
+
+    // 1. 从 Depot 获取 enforcer 和 subject（由 casbin_auth 中间件注入）
+    let enforcer = depot.obtain::<std::sync::Arc<casbin::Enforcer>>().ok();
+    let subject = depot.get::<String>("subject").ok();
+
+    // 2. 序列化为 JSON Value，手动调用 casbin_filter
+    let mut value = serde_json::to_value(&employee).unwrap();
+    if let (Some(e), Some(s)) = (&enforcer, &subject) {
+        Employee::casbin_filter(&mut value, e.as_ref(), s.as_str());
+    }
+    let filtered: Employee = serde_json::from_value(value).unwrap();
+
+    // 3. 包装为 RespVO 返回
+    Json(RespVO::from(&Ok::<_, String>(filtered)))
+}
+```
+
+**参数类型转换注意事项：**
+- `e.as_ref()` — `Arc<Enforcer>` → `&Enforcer`
+- `s.as_str()` — `String` → `&str`
+
+**类型注册要求：** 类型必须出现在 `#[endpoint]` handler 的返回类型中（如 `Json<RespVO<Employee>>`），这样 `extract_and_sync_schemas` 才会将其注册到 `auth_api_schemas` 表，用户才能在 `genies_auth_admin` 管理界面中看到并设置字段权限。
+
+### 9.4 中间件配置
 
 权限过滤依赖 `casbin_auth` 中间件将 `enforcer` 和 `subject` 注入 Depot：
 
@@ -300,7 +342,7 @@ let router = Router::new()
     .push(Router::with_path("/api/employees").get(get_employee));
 ```
 
-### 9.4 policy.csv 示例
+### 9.5 policy.csv 示例
 
 ```csv
 # 字段级权限（黑名单模式：默认允许，deny 规则生效）
@@ -598,10 +640,12 @@ extract_and_sync_schemas(&doc).await.ok();
 
 1. DTO 添加 `#[derive(ToSchema)]` → OpenAPI 文档包含字段定义
 2. `extract_and_sync_schemas(&doc)` → 字段信息写入 `auth_api_schemas` 表
-3. 通过 Admin UI（`/auth/ui/`）基于 Schema 配置字段级 deny 策略
+3. 通过 Auth Admin API 或 `genies_auth_admin` 管理界面基于 Schema 配置字段级 deny 策略
 4. 响应 DTO 添加 `#[casbin]` → Writer 层在序列化时根据策略自动过滤字段
 
-> 如果 DTO 不 derive ToSchema，`extract_and_sync_schemas` 无法提取其字段，Admin UI 中将看不到该 DTO 的字段列表。
+> 如果 DTO 不 derive ToSchema，`extract_and_sync_schemas` 无法提取其字段，管理界面中将看不到该 DTO 的字段列表。
+
+> **注意：** 当 handler 返回 `Json<RespVO<T>>` 时，Writer 自动过滤不生效，需手动调用 `T::casbin_filter()`，详见 [9.3 节](#93--respvo-包装时的字段过滤限制)。
 
 ## 15. 典型开发流程
 
@@ -628,7 +672,7 @@ extract_and_sync_schemas(&doc).await.ok();
 
 6. **启动服务**
    ```rust
-   use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router, auth_admin_ui_router};
+   use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router};
    
    #[tokio::main]
    async fn main() {
@@ -646,7 +690,6 @@ extract_and_sync_schemas(&doc).await.ok();
                .hoop(casbin_auth)
                .push(business_router())
                .push(auth_admin_router()))  // 权限管理 API
-           .push(auth_admin_ui_router())    // 权限管理 UI
            .push(genies::dapr_event_router());  // Dapr 事件路由
        
        let acceptor = TcpListener::new(&CONTEXT.config.server_url).bind().await;
@@ -672,13 +715,12 @@ extract_and_sync_schemas(&doc).await.ok();
 | `casbin_filter_object` | 嵌套字段过滤函数 |
 | `auth_admin_router()` | Admin API 路由（需认证） |
 | `auth_public_router()` | 公开 API 路由（Token 端点） |
-| `auth_admin_ui_router()` | Admin UI 静态资源路由 |
 | `extract_and_sync_schemas()` | OpenAPI Schema 同步到数据库 |
 
 ### 快速集成
 
 ```rust
-use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router, auth_admin_ui_router};
+use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router};
 use std::sync::Arc;
 
 // 1. 初始化 Enforcer
@@ -688,18 +730,10 @@ let mgr = Arc::new(EnforcerManager::new().await?);
 let router = Router::new()
     .hoop(affix_state::inject(mgr.clone()))
     .hoop(casbin_auth)
-    .push(auth_admin_router())   // /auth/policies, /auth/roles, ...
-    .push(auth_admin_ui_router());  // /auth/ui/
+    .push(auth_admin_router());   // /auth/policies, /auth/roles, ...
 ```
 
-### Admin UI
-
-访问 `/auth/ui/` 可使用 Web 界面管理：
-- 策略规则（Policies）
-- 角色分配（Roles）
-- 用户组（Groups）
-- Casbin 模型配置
-- OpenAPI Schema 浏览
+> **注意：** 管理界面（Admin UI）已迁移到独立的 `genies_auth_admin` crate，详见 auth-admin 的文档。
 
 ## 17. ID 生成
 

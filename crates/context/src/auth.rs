@@ -41,28 +41,17 @@ pub async fn checked_token(
         .strip_prefix("Bearer ")
         .unwrap_or("");
 
-    match &context.config.keycloak_auth_server_url.is_empty() {
-        false => {
-            //   return  JWTToken::verify(&CONTEXT.config.jwt_secret, token_value);
-            //  let n=&CONTEXT.keycloak_keys.keys[0].n.as_ref().clone().unwrap();
-            //  let e=&CONTEXT.keycloak_keys.keys[0].e.as_ref().clone().unwrap();
-            let keycloak = &context.keycloak_keys;
-            return JWTToken::verify_with_keycloak(keycloak, token_value);
+    match context.config.auth_mode.as_str() {
+        "local" => {
+            // 使用本地 HMAC-SHA256 验证（auth-admin 签发的 token）
+            JWTToken::verify_local(&context.config.jwt_secret, token_value)
         }
         _ => {
-            // return JWTToken::verify(&context.config.jwt_secret, token_value);
-            return Err(genies_core::error::Error::from("jwt_key error".to_string()));
+            // 默认 Keycloak RSA 验证
+            let keycloak = &context.keycloak_keys;
+            JWTToken::verify_with_keycloak(keycloak, token_value)
         }
-    };
-
-    // match jwt_token {
-    //     Ok(token) => {
-    //         return Ok(jwt_token);
-    //     }
-    //     Err(e) => {
-    //         return Err(crate::error::Error::from(e.to_string()));
-    //     }
-    // }
+    }
 }
 
 ///权限校验
@@ -104,6 +93,10 @@ pub async fn salvo_auth(req: &mut Request, depot: &mut Depot, res: &mut Response
                     Ok(_) => {
                         depot.insert("jwtToken",data.clone());
                         depot.insert("token",token.clone());
+                        // 注入 subject 供 Casbin 使用
+                        if let Some(ref username) = data.preferred_username {
+                            depot.insert("subject", username.clone());
+                        }
                         // 将下游调用链包裹在 REQUEST_TOKEN scope 中，
                         // 使得 #[remote] 宏和手写远程调用能自动获取当前请求的用户 token
                         REQUEST_TOKEN.scope(token, ctrl.call_next(req, depot, res)).await;

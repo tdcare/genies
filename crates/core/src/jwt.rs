@@ -14,7 +14,7 @@ use std::str::FromStr;
 
 
 /// JWT 鉴权 Token结构
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct JWTToken {
     //账号id
     pub id:  Option<String>,
@@ -62,6 +62,16 @@ pub struct JWTToken {
     pub name: Option<String>,
     #[serde(rename = "departmentAbstract")]
     pub department_abstract: Option<String>,
+}
+
+/// auth-admin 签发的本地 JWT Claims 格式
+#[derive(Debug, Deserialize)]
+struct LocalTokenClaims {
+    pub sub: String,
+    pub uid: Option<i64>,
+    pub name: Option<String>,
+    pub iat: usize,
+    pub exp: usize,
 }
 
 impl JWTToken {
@@ -118,6 +128,37 @@ impl JWTToken {
                 _ => return Err(Error::from("InvalidToken other errors")),
             },
         };
+    }
+
+    /// 使用本地密钥验证 auth-admin 签发的 JWT Token
+    /// 解码 LocalTokenClaims 格式并映射为 JWTToken
+    pub fn verify_local(secret: &str, token: &str) -> Result<JWTToken, crate::error::Error> {
+        let validation = Validation {
+            ..Validation::default()
+        };
+        match decode::<LocalTokenClaims>(
+            token,
+            &DecodingKey::from_secret(secret.as_ref()),
+            &validation,
+        ) {
+            Ok(c) => {
+                let claims = c.claims;
+                Ok(JWTToken {
+                    preferred_username: Some(claims.sub.clone()),
+                    sub: Some(claims.sub),
+                    user_id: claims.uid.map(|id| id.to_string()),
+                    name: claims.name,
+                    exp: Some(claims.exp),
+                    iat: Some(claims.iat),
+                    ..Default::default()
+                })
+            }
+            Err(err) => match *err.kind() {
+                ErrorKind::InvalidToken => Err(Error::from("InvalidToken")),
+                ErrorKind::InvalidIssuer => Err(Error::from("InvalidIssuer")),
+                _ => Err(Error::from("InvalidToken other errors")),
+            },
+        }
     }
 }
 

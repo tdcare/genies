@@ -662,7 +662,7 @@ assert!(obj_test(&obj, &tree));
 | **genies_dapr** | 1.4.2 | Dapr 集成：CloudEvent 解析、PubSub 订阅配置、Topic 自动收集 |
 | **genies_ddd** | 1.4.2 | DDD 核心：聚合根 Trait、领域事件 Trait、消息发布器、Message 表模型 |
 | **genies_k8s** | 1.4.2 | Kubernetes 探针：存活/就绪检查端点 |
-| **genies_auth** | 1.4.2 | Casbin 权限：EnforcerManager、API 中间件、字段过滤、Admin UI |
+| **genies_auth** | 1.4.2 | Casbin 权限：EnforcerManager、API 中间件、字段过滤、Admin API |
 
 ### 第三方依赖
 
@@ -712,7 +712,6 @@ pub use middleware::casbin_filter_object;
 // 路由构建器
 pub use admin_api::auth_admin_router;    // 需认证的管理 API
 pub use admin_api::auth_public_router;   // 公开 API（Token 端点）
-pub use admin_ui::auth_admin_ui_router;  // Admin UI 静态资源
 
 // Schema 同步
 pub use schema_extractor::extract_and_sync_schemas;
@@ -884,7 +883,7 @@ REMOTE_TOKEN.lock().unwrap().access_token = "new_token".to_string();
 ```rust
 use genies::context::CONTEXT;
 use genies_auth::{
-    auth_admin_router, auth_admin_ui_router, auth_public_router,
+    auth_admin_router, auth_public_router,
     casbin_auth, extract_and_sync_schemas, EnforcerManager,
 };
 use genies_derive::casbin;
@@ -933,7 +932,6 @@ async fn main() {
 
     let router = Router::new()
         .push(protected_router)
-        .push(auth_admin_ui_router())
         .push(auth_public_router())
         .push(genies::k8s::k8s_health_check())
         .push(genies::dapr_event_router());

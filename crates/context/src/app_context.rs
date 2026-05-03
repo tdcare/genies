@@ -200,13 +200,30 @@ impl ApplicationContext {
         genies_core::id_gen::init(machine_id, 1);
         
         ApplicationContext {
-            keycloak_keys: std::thread::spawn(move || {
-                let rt = tokio::runtime::Runtime::new().unwrap();
-                rt.block_on(async {
-                    get_keycloak_keys(&auth_url, &auth_realm).await
-                })
-            }).join().unwrap()
-                .expect("Failed to get keycloak keys"),
+            keycloak_keys: if config.auth_mode == "local" {
+                log::info!("auth_mode=local, skipping keycloak key initialization");
+                Keys { keys: vec![] }
+            } else {
+                std::thread::spawn(move || {
+                    let rt = tokio::runtime::Runtime::new().unwrap();
+                    rt.block_on(async {
+                        if auth_url.is_empty() || auth_realm.is_empty() {
+                            log::warn!(
+                                "Keycloak auth_server_url or realm is empty, \
+                                 skipping keycloak key initialization."
+                            );
+                            Ok(Keys { keys: vec![] })
+                        } else {
+                            log::info!("Initializing keycloak keys from: {}", auth_url);
+                            get_keycloak_keys(&auth_url, &auth_realm).await
+                        }
+                    })
+                }).join().unwrap()
+                    .unwrap_or_else(|e| {
+                        log::warn!("Failed to get keycloak keys: {}, token verification will use local JWT", e);
+                        Keys { keys: vec![] }
+                    })
+            },
             rbatis: RBatis::new(),
             cache_service,
             redis_save_service,

@@ -6,6 +6,8 @@ A comprehensive RBAC permission management module for the Genies (神灯) framew
 
 genies_auth provides a complete role-based access control (RBAC) solution with both API-level and field-level permission control. It integrates seamlessly with Salvo web framework and supports dynamic policy updates without service restart.
 
+> **Note**: The Web management UI has been moved to the standalone [auth-admin](../auth-admin/) service. This crate focuses on runtime permission enforcement only.
+
 ## Features
 
 - **Hybrid Permission Model**: API endpoint-level + field-level access control

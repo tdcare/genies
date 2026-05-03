@@ -54,6 +54,9 @@ keycloak_realm: "tdcare"
 keycloak_resource: "tdnis"
 keycloak_credentials_secret: "701ef8cd-43b9-407e-80df-0dfc96c461dc"
 
+# 认证模式: "keycloak" | "local"
+auth_mode: "keycloak"
+
 ## Dapr http 端口
 #dapr_http_port: 3500
 #dapr_http: http://localhost:3500

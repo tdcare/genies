@@ -15,7 +15,7 @@
 #[cfg(test)]
 mod tests {
     use genies::context::CONTEXT;
-    use genies_auth::{auth_admin_router, auth_admin_ui_router, auth_public_router, casbin_auth, extract_and_sync_schemas, EnforcerManager};
+    use genies_auth::{auth_admin_router, auth_public_router, casbin_auth, extract_and_sync_schemas, EnforcerManager};
     use genies_derive::casbin;
     use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION};
     use salvo::prelude::*;
@@ -301,7 +301,6 @@ mod tests {
                     let router = Router::new()
                         .push(protected_router)
                         .push(auth_public_router())     // Token 获取不需要认证
-                        .push(auth_admin_ui_router())  // 静态资源不需要认证
                         .push(genies::k8s::k8s_health_check());
 
                     // 固定端口绑定

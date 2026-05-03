@@ -32,7 +32,7 @@ pub const CODE_SUCCESS_I32: i32 = 1;
 pub const CODE_FAIL_I32: i32 = 0;
 
 /// http接口返回模型结构，提供基础的 code，msg，data 等json数据结构
-#[derive(Debug, Serialize, Deserialize, Clone,Default)]
+#[derive(Debug, Serialize, Deserialize, Clone,Default,ToSchema)]
 pub struct RespVO<T> {
     pub code: Option<String>,
     pub msg: Option<String>,

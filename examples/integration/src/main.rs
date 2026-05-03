@@ -1,11 +1,10 @@
 //! 集成测试服务器
 //!
 //! 启动方式: `cargo run -p integration`
-//! 访问 Auth UI: http://127.0.0.1:18080/auth/ui/
 
 use genies::context::CONTEXT;
 use genies_auth::{
-    auth_admin_router, auth_admin_ui_router, auth_public_router, casbin_auth, extract_and_sync_schemas,
+    auth_admin_router, auth_public_router, casbin_auth, extract_and_sync_schemas,
     EnforcerManager,
 };
 use genies_derive::casbin;
@@ -305,7 +304,6 @@ async fn main() {
     // 构建顶层路由
     let router = Router::new()
         .push(protected_router)
-        .push(auth_admin_ui_router()) // 静态资源不需要认证
         .push(auth_public_router())   // Token 端点不需要认证
         .push(genies::k8s::k8s_health_check())
         // OpenAPI 文档（不需要认证）
@@ -320,7 +318,6 @@ async fn main() {
     println!("    服务器启动成功!");
     println!("========================================");
     println!("  端口: 18080");
-    println!("  Auth UI: http://127.0.0.1:18080/auth/ui/");
     println!("  Admin API: http://127.0.0.1:18080/auth/");
     println!("  API 文档: http://127.0.0.1:18080/swagger-ui/");
     println!("  OpenAPI JSON: http://127.0.0.1:18080/api-doc/openapi.json");

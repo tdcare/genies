@@ -88,7 +88,7 @@ use genies_test::mutation::{
 let _lock = DB_MUTATION_LOCK.lock().await;
 
 // Compare two sets of DbChange vectors
-compare_db_changes("operation", &java_changes, &rust_changes, &dynamic_fields);
+let diffs = compare_db_changes(&java_changes, &rust_changes, &dynamic_fields);
 
 // Full 8-step mutation comparison test
 test_mutation_with_db_diff(
@@ -228,6 +228,68 @@ async fn compare_with_tolerance() {
 - **serde_json** — JSON serialization and comparison
 - **tokio** — Async runtime
 - **rbs** — RBatis serialization helpers
+
+## Integration Guide
+
+### Migration Notes
+
+1. **genies_test provides generic tools only** — Business-specific configuration (service URLs, database connections, test IDs, cleanup functions) must be defined in each project's `tests/common/mod.rs`.
+2. **RBatis initialization is the caller's responsibility** — `db_snapshot`/`db_diff`/`db_restore` require a `&RBatis` instance passed by the caller.
+3. **Sort JSON arrays before comparison** — To avoid false positives caused by inconsistent array ordering, sort arrays by a key field (e.g. `sort_json_arrays`) before calling `deep_diff`.
+4. **Unified re-export pattern** — Use `pub use genies_test::*;` in `tests/common/mod.rs` to re-export all generic tools, then add project-specific functions in the same file.
+
+### Project Integration Example
+
+```toml
+# Cargo.toml
+[dev-dependencies]
+genies_test = { path = "../../crates/test" }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+rbatis = "4"
+rbdc-mysql = "4"
+```
+
+```rust
+// tests/common/mod.rs
+pub use genies_test::*;
+
+use rbatis::RBatis;
+use rbdc_mysql::MysqlDriver;
+
+// Business-specific configuration
+pub fn java_base_url() -> String {
+    std::env::var("JAVA_BASE_URL").unwrap_or_else(|_| "http://localhost:8080/api".into())
+}
+pub fn rust_base_url() -> String {
+    std::env::var("RUST_BASE_URL").unwrap_or_else(|_| "http://localhost:8081/api".into())
+}
+pub fn database_url() -> String {
+    std::env::var("TEST_DATABASE_URL").unwrap_or_else(|_| "mysql://user:pass@host/db".into())
+}
+pub async fn init_test_rbatis() -> RBatis {
+    let rb = RBatis::new();
+    rb.init(MysqlDriver {}, &database_url()).unwrap();
+    rb
+}
+
+/// Sort JSON arrays by key to avoid ordering mismatches
+pub fn sort_json_arrays(value: &mut serde_json::Value, sort_key: &str) {
+    match value {
+        serde_json::Value::Array(arr) => {
+            arr.sort_by(|a, b| {
+                let ak = a.get(sort_key).and_then(|v| v.as_str()).unwrap_or("");
+                let bk = b.get(sort_key).and_then(|v| v.as_str()).unwrap_or("");
+                ak.cmp(bk)
+            });
+        }
+        serde_json::Value::Object(map) => {
+            for (_, v) in map.iter_mut() { sort_json_arrays(v, sort_key); }
+        }
+        _ => {}
+    }
+}
+```
 
 ## Integration with Other Crates
 

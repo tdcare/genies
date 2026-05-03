@@ -23,6 +23,7 @@
 //! | `/auth/groups` | POST | 添加对象分组 |
 //! | `/auth/groups/{id}` | DELETE | 移除对象分组 |
 //! | `/auth/reload` | POST | 手动触发 Enforcer 重载 |
+//! | `/auth/sync/receive-user-roles` | POST | 接收用户-角色映射同步 |
 
 use std::sync::Arc;
 
@@ -746,6 +747,64 @@ pub async fn remove_group(id: PathParam<i64>, depot: &mut Depot) -> Json<ApiResp
 }
 
 // ============================================================================
+// Sync 端点
+// ============================================================================
+
+/// 同步用户-角色映射请求体
+#[derive(Debug, Deserialize, salvo::oapi::ToSchema)]
+#[salvo(schema(example = json!({"ptype": "g", "v0": "admin", "v1": "admin_role"})))]
+struct SyncUserRoleRequest {
+    /// 策略类型（仅处理 "g"）
+    ptype: String,
+    /// 用户标识
+    v0: String,
+    /// 角色标识
+    v1: String,
+}
+
+/// POST /auth/sync/receive-user-roles — 接收用户-角色映射同步
+///
+/// 接收 auth-admin 推送的用户-角色映射，全量替换本地 g 规则并重载 Enforcer
+#[endpoint(tags("sync"), summary = "接收用户-角色映射同步", description = "接收 auth-admin 推送的用户-角色映射，全量替换本地 g 规则并重载 Enforcer")]
+pub async fn receive_user_roles(
+    body: JsonBody<Vec<SyncUserRoleRequest>>,
+    depot: &mut Depot,
+) -> Json<ApiResponse<String>> {
+    let items = body.into_inner();
+
+    // 过滤只保留 ptype == "g" 的规则
+    let rules: Vec<(String, String)> = items.iter()
+        .filter(|r| r.ptype == "g")
+        .map(|r| (r.v0.clone(), r.v1.clone()))
+        .collect();
+    let count = rules.len();
+
+    // 调用共享的 replace_g_rules 函数
+    match crate::startup_sync::replace_g_rules(&rules).await {
+        Ok(_) => {
+            log::info!("接收并写入 {} 条用户-角色 g 规则", count);
+
+            // 重载 Enforcer
+            if let Ok(mgr) = depot.obtain::<Arc<EnforcerManager>>() {
+                if let Err(e) = mgr.reload().await {
+                    log::warn!("Enforcer 重载失败: {}", e);
+                    return Json(ApiResponse::ok(format!(
+                        "已写入 {} 条 g 规则，但 Enforcer 重载失败: {}",
+                        count, e
+                    )));
+                }
+            }
+
+            Json(ApiResponse::ok(format!("同步成功，共 {} 条 g 规则", count)))
+        }
+        Err(e) => {
+            log::error!("同步 g 规则失败: {}", e);
+            Json(ApiResponse::err(format!("同步失败: {}", e)))
+        }
+    }
+}
+
+// ============================================================================
 // Reload 端点
 // ============================================================================
 
@@ -795,6 +854,7 @@ pub fn auth_admin_router() -> Router {
         .push(Router::with_path("/groups").get(list_groups).post(add_group))
         .push(Router::with_path("/groups/{id}").delete(remove_group))
         .push(Router::with_path("/reload").post(reload_enforcer))
+        .push(Router::with_path("/sync/receive-user-roles").post(receive_user_roles))
 }
 
 // ============================================================================
