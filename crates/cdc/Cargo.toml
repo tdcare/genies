@@ -1,6 +1,6 @@
 [package]
 name = "cdc"
-version = "1.7.1"
+version = "1.8.0"
 authors = ["tzw <tzw@tdcare.cn>"]
 edition = "2021"
 
