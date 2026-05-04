@@ -75,6 +75,9 @@ pub mod event_handler;
 /// 启动时用户-角色同步（从 auth-admin 拉取 g 规则）
 pub mod startup_sync;
 
+/// 微服务实例注册 / 心跳 / 注销客户端
+pub mod service_registry;
+
 // ============================================================================
 // 公开 API Re-exports
 // ============================================================================
@@ -106,3 +109,6 @@ pub use event::{
     UserRoleAssignedEvent, UserRoleRevokedEvent,
     RolePermissionAssignedEvent, RolePermissionRevokedEvent,
 };
+
+// 服务注册
+pub use service_registry::try_register_and_heartbeat;

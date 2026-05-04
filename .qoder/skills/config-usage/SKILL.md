@@ -58,6 +58,9 @@ pub struct ApplicationConfig {
     pub dapr_cdc_message_period: i64,
     pub processing_expire_seconds: i64,
     pub record_reserve_minutes: i64,
+
+    // === 心跳 ===
+    pub heartbeat_interval: u64,        // 心跳间隔（秒），默认30
 }
 ```
 
@@ -101,6 +104,9 @@ dapr_pub_message_limit: 50
 dapr_cdc_message_period: 5000
 processing_expire_seconds: 60
 record_reserve_minutes: 10080
+
+# 心跳
+heartbeat_interval: 30
 
 # API 白名单
 white_list_api:
@@ -264,7 +270,7 @@ pub struct ValidatedConfig {
 |-------|---------------|
 | genies_cache | `cache_type`, `redis_url`, `redis_save_url` |
 | genies_core | `keycloak_*` 字段 |
-| genies_auth | `white_list_api` |
+| genies_auth | `white_list_api`, `heartbeat_interval`, `auth_admin_url`, `jwt_secret` |
 | genies_context | 管理完整 `ApplicationConfig` |
 | genies_ddd | `dapr_pubsub_name`, `dapr_*` 字段 |
 

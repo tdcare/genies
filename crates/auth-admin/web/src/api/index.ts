@@ -63,6 +63,7 @@ export interface DepartmentRecord {
   parent_id?: number
   sort_order?: number
   description?: string
+  member_count?: number
   status: number
   created_at?: string
   updated_at?: string
@@ -410,3 +411,26 @@ export const reloadAppEnforcer = (appId: number) =>
 
 export const syncAppUserRoles = (appId: number) =>
   api.post(`/auth-admin/apps/${appId}/sync-user-roles`)
+
+// ============================================================================
+// Instances API（实例管理）
+// ============================================================================
+
+export interface InstanceRecord {
+  id: number
+  app_name: string
+  instance_id: string  // 大整数，后端序列化为字符串
+  base_url: string
+  version: string
+  status: number       // 1=在线, 0=离线
+  last_heartbeat_at?: string
+  registered_at?: string
+}
+
+// 查询应用的实例列表
+export const getAppInstances = (appId: number) =>
+  api.get<ApiResponse<InstanceRecord[]>>(`/auth-admin/apps/${appId}/instances`).then(r => r.data.data)
+
+// 查询所有实例（分页）
+export const getAllInstances = (params?: { page?: number; size?: number; keyword?: string }) =>
+  api.get<ApiResponse<PageData<InstanceRecord>>>('/auth-admin/instances', { params }).then(r => r.data.data)

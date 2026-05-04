@@ -14,6 +14,9 @@ pub struct AdminDepartment {
     pub status: i8,
     pub created_at: Option<rbdc::DateTime>,
     pub updated_at: Option<rbdc::DateTime>,
+    /// 部门成员数量（不映射到数据库列，仅在查询时填充）
+    #[serde(default)]
+    pub member_count: Option<i64>,
 }
 
 crud!(AdminDepartment{}, "auth_admin_departments");

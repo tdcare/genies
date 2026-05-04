@@ -114,10 +114,10 @@ pub(crate) fn impl_remote(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenStr
                             ).await
                         } else {
                             genies::core::jwt::get_temp_access_token(
-                                &genies::context::CONTEXT.config.keycloak_auth_server_url,
-                                &genies::context::CONTEXT.config.keycloak_realm,
-                                &genies::context::CONTEXT.config.keycloak_resource,
-                                &genies::context::CONTEXT.config.keycloak_credentials_secret,
+                                genies::context::CONTEXT.config.keycloak_auth_server_url.as_deref().unwrap_or(""),
+                                genies::context::CONTEXT.config.keycloak_realm.as_deref().unwrap_or(""),
+                                genies::context::CONTEXT.config.keycloak_resource.as_deref().unwrap_or(""),
+                                genies::context::CONTEXT.config.keycloak_credentials_secret.as_deref().unwrap_or(""),
                             ).await
                         };
                         if let Ok(remote_token_new) = refresh_result {

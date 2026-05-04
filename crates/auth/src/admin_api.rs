@@ -871,13 +871,16 @@ pub async fn get_access_token() -> Json<ApiResponse<TokenResponse>> {
 
     let config = &CONTEXT.config;
 
-    match get_temp_access_token(
-        &config.keycloak_auth_server_url,
-        &config.keycloak_realm,
-        &config.keycloak_resource,
-        &config.keycloak_credentials_secret,
-    )
-    .await {
+    if config.auth_mode != "keycloak" {
+        return Json(ApiResponse::err("get_access_token 仅在 keycloak 模式下可用"));
+    }
+
+    let url = config.keycloak_auth_server_url.as_deref().unwrap_or("");
+    let realm = config.keycloak_realm.as_deref().unwrap_or("");
+    let resource = config.keycloak_resource.as_deref().unwrap_or("");
+    let secret = config.keycloak_credentials_secret.as_deref().unwrap_or("");
+
+    match get_temp_access_token(url, realm, resource, secret).await {
         Ok(token) => {
             let token_resp = TokenResponse {
                 access_token: token,

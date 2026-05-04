@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Refresh, Edit, Delete, Setting } from '@element-plus/icons-vue'
-import { getApps, createApp, updateApp, deleteApp, syncAppUserRoles, type AppRecord, type PageData } from '../api'
+import { getApps, createApp, updateApp, deleteApp, syncAppUserRoles, getAppInstances, type AppRecord, type InstanceRecord, type PageData } from '../api'
 
 const router = useRouter()
 const loading = ref(false)
@@ -12,6 +12,69 @@ const total = ref(0)
 const page = ref(1)
 const size = ref(10)
 const keyword = ref('')
+
+// 实例数据：key 为 app id
+const instanceMap = ref<Record<number, InstanceRecord[]>>({})
+const instanceLoading = ref<Record<number, boolean>>({})
+
+// 相对时间格式化
+function timeAgo(dateStr?: string): string {
+  if (!dateStr) return '-'
+  const now = Date.now()
+  const past = new Date(dateStr).getTime()
+  if (isNaN(past)) return dateStr
+  const diff = Math.max(0, now - past)
+  const seconds = Math.floor(diff / 1000)
+  if (seconds < 60) return `${seconds}秒前`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}小时前`
+  const days = Math.floor(hours / 24)
+  return `${days}天前`
+}
+
+// 计算在线实例数
+function onlineCount(appId: number): number {
+  const list = instanceMap.value[appId]
+  if (!list) return 0
+  return list.filter(i => i.status === 1).length
+}
+
+function totalCount(appId: number): number {
+  return instanceMap.value[appId]?.length ?? 0
+}
+
+// 实例数颜色
+function instanceCountType(appId: number): string {
+  const list = instanceMap.value[appId]
+  if (!list || list.length === 0) return 'info'
+  const online = list.filter(i => i.status === 1).length
+  if (online === list.length) return 'success'
+  if (online === 0) return 'danger'
+  return 'warning'
+}
+
+// 展开行时加载实例
+async function handleExpandChange(row: AppRecord, expandedRows: AppRecord[]) {
+  const isExpanded = expandedRows.some(r => r.id === row.id)
+  if (isExpanded && !instanceMap.value[row.id]) {
+    await loadInstances(row.id)
+  }
+}
+
+async function loadInstances(appId: number) {
+  instanceLoading.value[appId] = true
+  try {
+    const data = await getAppInstances(appId)
+    instanceMap.value[appId] = data
+  } catch (e: any) {
+    ElMessage.error(e.message || '加载实例列表失败')
+    instanceMap.value[appId] = []
+  } finally {
+    instanceLoading.value[appId] = false
+  }
+}
 
 async function loadApps() {
   loading.value = true
@@ -22,6 +85,8 @@ async function loadApps() {
     })
     appList.value = data.list
     total.value = data.total
+    // 清空旧的实例缓存
+    instanceMap.value = {}
   } catch (e: any) {
     ElMessage.error(e.message || '加载应用列表失败')
   } finally {
@@ -158,11 +223,52 @@ onMounted(() => { loadApps() })
     </div>
 
     <!-- 表格 -->
-    <el-table v-loading="loading" :data="appList" border stripe class="data-table">
+    <el-table v-loading="loading" :data="appList" border stripe class="data-table"
+      row-key="id" @expand-change="handleExpandChange">
+      <el-table-column type="expand">
+        <template #default="{ row }">
+          <div class="instance-detail" v-loading="instanceLoading[row.id]">
+            <el-table v-if="instanceMap[row.id] && instanceMap[row.id].length > 0"
+              :data="instanceMap[row.id]" border size="small" class="instance-table">
+              <el-table-column label="实例ID" width="200">
+                <template #default="{ row: inst }">
+                  <span style="font-family: monospace;">{{ String(inst.instance_id) }}</span>
+                </template>
+              </el-table-column>
+              <el-table-column prop="base_url" label="访问地址" min-width="180" />
+              <el-table-column prop="version" label="版本" width="100" />
+              <el-table-column label="状态" width="80">
+                <template #default="{ row: inst }">
+                  <el-tag v-if="inst.status === 1" type="success" size="small">在线</el-tag>
+                  <el-tag v-else type="danger" size="small">离线</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column label="最后心跳" width="130">
+                <template #default="{ row: inst }">
+                  <el-tooltip :content="inst.last_heartbeat_at || '-'" placement="top">
+                    <span>{{ timeAgo(inst.last_heartbeat_at) }}</span>
+                  </el-tooltip>
+                </template>
+              </el-table-column>
+              <el-table-column prop="registered_at" label="注册时间" width="170" />
+            </el-table>
+            <el-empty v-else-if="instanceMap[row.id] && instanceMap[row.id].length === 0"
+              description="暂无实例" :image-size="60" />
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="app_name" label="应用名称" min-width="120" />
       <el-table-column prop="display_name" label="显示名称" min-width="120" />
       <el-table-column prop="base_url" label="访问地址" min-width="200" />
+      <el-table-column label="实例" width="90" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="instanceMap[row.id]" :type="instanceCountType(row.id)" size="small" effect="plain">
+            {{ onlineCount(row.id) }}/{{ totalCount(row.id) }}
+          </el-tag>
+          <span v-else style="color: #909399; font-size: 12px;">展开查看</span>
+        </template>
+      </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
           <el-tag v-if="row.status === 1" type="success">启用</el-tag>
@@ -250,5 +356,13 @@ onMounted(() => { loadApps() })
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+}
+
+.instance-detail {
+  padding: 12px 20px;
+}
+
+.instance-table {
+  width: 100%;
 }
 </style>

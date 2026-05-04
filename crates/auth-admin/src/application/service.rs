@@ -561,7 +561,25 @@ pub struct DepartmentAppService;
 impl DepartmentAppService {
     pub async fn list_all() -> Result<Vec<AdminDepartment>, String> {
         let rb = &CONTEXT.rbatis;
-        AdminDepartment::list_all(rb).await.map_err(|e| e.to_string())
+        let mut departments = AdminDepartment::list_all(rb).await.map_err(|e| e.to_string())?;
+
+        // 查询所有部门的成员数量，构建 HashMap 映射
+        let counts = UserDepartment::count_members_by_department(rb)
+            .await
+            .map_err(|e| e.to_string())?;
+        let count_map: std::collections::HashMap<i64, i64> = counts
+            .into_iter()
+            .map(|c| (c.department_id, c.count))
+            .collect();
+
+        // 将成员数量填充到每个部门，无成员的部门设为 0
+        for dept in &mut departments {
+            if let Some(id) = dept.id {
+                dept.member_count = Some(*count_map.get(&id).unwrap_or(&0));
+            }
+        }
+
+        Ok(departments)
     }
 
     pub async fn create(input: &serde_json::Value) -> Result<(), String> {

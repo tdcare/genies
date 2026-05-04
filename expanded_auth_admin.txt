@@ -1,0 +1,10 @@
+﻿cargo : error: manifest path `D:\tdcare\genies\Cargo.toml` is a virtual manifes
+t, but this command requires running against an actual package in this workspac
+e
+At line:1 char:22
++ cd d:\tdcare\genies; cargo expand --bin auth-admin 2>&1 | Out-File -F ...
++                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (error: manifest... this workspace 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

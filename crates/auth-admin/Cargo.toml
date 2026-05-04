@@ -1,6 +1,6 @@
 [package]
 name = "genies_auth_admin"
-version = "1.7.0"
+version = "1.7.1"
 authors = ["tdcare"]
 edition = "2021"
 license = "MIT"

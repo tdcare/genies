@@ -466,21 +466,25 @@ mod config_tests {
     async fn test_config_keycloak_settings() {
         let config = &CONTEXT.config;
 
+        let url = config.keycloak_auth_server_url.as_deref().unwrap_or("");
+        let realm = config.keycloak_realm.as_deref().unwrap_or("");
+        let resource = config.keycloak_resource.as_deref().unwrap_or("");
+
         assert!(
-            !config.keycloak_auth_server_url.is_empty(),
+            !url.is_empty(),
             "keycloak_auth_server_url should not be empty"
         );
         assert!(
-            !config.keycloak_realm.is_empty(),
+            !realm.is_empty(),
             "keycloak_realm should not be empty"
         );
         assert!(
-            !config.keycloak_resource.is_empty(),
+            !resource.is_empty(),
             "keycloak_resource should not be empty"
         );
 
-        println!("keycloak_auth_server_url: {}", config.keycloak_auth_server_url);
-        println!("keycloak_realm: {}", config.keycloak_realm);
+        println!("keycloak_auth_server_url: {}", url);
+        println!("keycloak_realm: {}", realm);
     }
 }
 

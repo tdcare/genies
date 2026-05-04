@@ -11,19 +11,25 @@
 ### 模块功能概览（来源：lib.rs）
 
 ```
-Auth 模块 - Casbin 权限管理系统
+Auth 模块 - 权限管理系统
 
-提供基于 Casbin 的完整权限管理方案，包括：
-- API 接口级访问控制
-- 字段级权限过滤
-- 动态策略管理
+提供基于 Casbin 的运行时权限控制方案，被各业务微服务集成：
+- API 接口级访问控制 + 字段级权限过滤
+- JWT 认证中间件（Token 由 auth-admin 统一签发）
+- Casbin 策略 Admin API
+- Dapr 事件驱动的 casbin_rules 同步
 - OpenApi Schema 自动同步
 
 核心组件：
 - EnforcerManager - Casbin Enforcer 管理器，支持热更新
-- casbin_auth - API 权限中间件
+- casbin_auth - API Casbin 权限中间件
+- local_auth - JWT 认证中间件
+- combined_auth - 组合认证+授权中间件（JWT + Casbin）
 - auth_admin_router - Admin API 路由
+- auth_public_router - 公共路由（无需认证）
 - extract_and_sync_schemas - Schema 同步函数
+- event_handler - Dapr 事件订阅处理
+- startup_sync - 启动时用户-角色同步
 ```
 
 ---
@@ -189,7 +195,203 @@ Casbin API 接口访问控制中间件
 
 ---
 
-## 3. #[casbin] 宏生成的完整代码示例
+## 2.5. JWT 认证中间件详解 (auth_middleware.rs)
+
+### 模块功能说明
+
+```
+Auth 认证中间件
+
+提供 JWT 验证 + Casbin 授权功能：
+- local_auth — JWT 验证中间件
+- combined_auth — JWT 认证 + Casbin API 授权组合中间件
+- verify_token — JWT 验证函数
+
+登录功能由 auth-admin 服务统一提供，本模块仅负责 Token 验证。
+```
+
+### LocalAuthConfig 完整定义
+
+```rust
+/// 本地认证配置（通过 affix_state 注入）
+#[derive(Clone)]
+pub struct LocalAuthConfig {
+    /// JWT 签名密钥
+    pub secret: String,
+    /// Token 有效期（秒），默认 7200 (2小时)
+    pub expires_in_secs: usize,
+}
+
+impl Default for LocalAuthConfig {
+    fn default() -> Self {
+        Self {
+            secret: "genies_auth_local_jwt_secret_change_me".to_string(),
+            expires_in_secs: 7200,
+        }
+    }
+}
+
+impl LocalAuthConfig {
+    pub fn new(secret: impl Into<String>) -> Self { ... }
+    pub fn with_expiry(secret: impl Into<String>, expires_in_secs: usize) -> Self { ... }
+}
+```
+
+### LocalClaims 完整定义
+
+```rust
+/// 本地 JWT 声明结构
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LocalClaims {
+    pub sub: String,           // 用户名
+    pub uid: Option<i64>,      // 用户 ID
+    pub name: Option<String>,  // 显示名称
+    pub iat: usize,            // 签发时间 (UTC 秒)
+    pub exp: usize,            // 过期时间 (UTC 秒)
+}
+```
+
+### verify_token 函数签名
+
+```rust
+/// 验证本地 JWT Token，返回 Claims
+/// 自动处理 "Bearer " 前缀
+pub fn verify_token(token: &str, secret: &str) -> Result<LocalClaims, String>
+```
+
+### local_auth 中间件工作流程
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  local_auth 中间件                                                       │
+│  ├── 1. 从 Depot 获取 Arc<LocalAuthConfig>                              │
+│  │      (若未注入 → 500 "认证配置错误")                                  │
+│  ├── 2. 从 Request Header 获取 Authorization                            │
+│  │      (若为空 → 401 "未提供认证令牌")                                  │
+│  ├── 3. 调用 verify_token(token, secret)                                 │
+│  │      (若失败 → 401 "令牌验证失败: ...")                               │
+│  ├── 4. 构造 JWTToken 兼容对象                                          │
+│  │      preferred_username = claims.sub                                  │
+│  │      user_id = claims.uid                                             │
+│  │      name = claims.name                                               │
+│  └── 5. 注入 Depot:                                                      │
+│         depot.insert("jwtToken", jwt_token)   — 兼容 casbin_auth        │
+│         depot.insert("local_user", claims)    — 完整 LocalClaims        │
+│         depot.insert("subject", username)     — 用户名字符串            │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### combined_auth 中间件工作流程
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  combined_auth 中间件                                                    │
+│                                                                         │
+│  Step 1: JWT 认证（同 local_auth）                                       │
+│  ├── 获取 LocalAuthConfig → 验证 Token → 注入 Depot                     │
+│                                                                         │
+│  Step 2: Casbin API 权限检查                                             │
+│  ├── 1. 从 depot["jwtToken"] 获取 preferred_username (或 "guest")        │
+│  ├── 2. 从 Depot 获取 Arc<EnforcerManager>                              │
+│  │      (若未注入 → 跳过 Casbin 检查，继续执行)                          │
+│  ├── 3. 调用 mgr.get_enforcer().await                                    │
+│  ├── 4. 获取 path + method                                               │
+│  └── 5. enforcer.enforce((subject, path, method))                        │
+│         ├── Err(_) → 403 "无权限访问: {path}"                           │
+│         └── 其他 → 继续执行                                              │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**注意**: `combined_auth` 在 EnforcerManager 未注入时会**跳过** Casbin 检查（graceful degradation），而非返回错误。这与 `casbin_auth` 中间件（返回 500）的行为不同。
+
+### 三种中间件的 Depot 注入对比
+
+| Key | local_auth | combined_auth | casbin_auth |
+|-----|-----------|---------------|-------------|
+| `"jwtToken"` | ✅ JWTToken | ✅ JWTToken | ❌ (reads, doesn't write) |
+| `"local_user"` | ✅ LocalClaims | ✅ LocalClaims | ❌ |
+| `"subject"` | ✅ String | ✅ String | ❌ |
+| `"casbin_enforcer"` | ❌ | ❌ | ✅ Arc\<Enforcer\> |
+| `"casbin_subject"` | ❌ | ❌ | ✅ String |
+
+**重要**: `combined_auth` 不注入 `casbin_enforcer` / `casbin_subject`。如果需要字段级过滤（Writer），仍需在 `combined_auth` 后加 `casbin_auth`，或手动从 Depot 获取 enforcer。
+
+---
+
+## 2.6. 事件驱动同步详解 (event.rs + event_handler.rs)
+
+### 事件定义
+
+所有事件通过 `#[derive(DomainEvent)]` 宏自动实现 `DomainEvent` trait，属性：
+- `#[event_type("auth.xxx.yyy")]` — 事件类型标识
+- `#[event_type_version("V1")]` — 版本号
+- `#[event_source("auth-admin")]` — 事件来源
+
+### 事件 handler 注册
+
+每个 handler 使用 `#[genies_derive::topic]` 宏注册为 Dapr 订阅者：
+
+```rust
+#[genies_derive::topic(name = "auth.user_role.assigned", pubsub = "messagebus")]
+pub async fn handle_user_role_assigned(
+    tx: &mut dyn Executor,
+    event: UserRoleAssignedEvent,
+) -> anyhow::Result<()> {
+    genies::context::CONTEXT.rbatis.exec(
+        "INSERT INTO casbin_rules (ptype, v0, v1) VALUES ('g', ?, ?)",
+        vec![rbs::value!(&event.username), rbs::value!(&event.role_name)],
+    ).await?;
+    Ok(())
+}
+```
+
+### 事件处理策略
+
+| 事件类别 | created | updated | deleted |
+|----------|---------|---------|---------|
+| User | 日志 | 日志 | 删除 g 规则 (v0=username) |
+| Role | 日志 | 日志 | 删除 g 规则 (v1=role) + p 规则 (v0=role) |
+| Permission | 日志 | 日志 | 删除 p 规则 (v1=resource, v2=action) |
+| UserRole | 插入 g 规则 | — | 删除 g 规则 |
+| RolePermission | 插入 p 规则 (v3='allow') | — | 删除 p 规则 |
+
+---
+
+## 2.7. 启动时同步详解 (startup_sync.rs)
+
+### 同步函数
+
+```rust
+/// 启动时尝试同步用户-角色映射
+/// 仅在 auth_mode == "local" 且 auth_admin_url 非空时执行
+/// 同步失败不中断启动
+pub async fn try_sync_on_startup(config: &ApplicationConfig)
+
+/// 从 auth-admin 拉取并全量替换 g 规则
+pub async fn sync_user_roles_from_admin(auth_admin_url: &str, jwt_secret: &str) -> anyhow::Result<usize>
+
+/// 全量替换 casbin_rules 中的 g 规则（事务内）
+pub async fn replace_g_rules(rules: &[(String, String)]) -> anyhow::Result<usize>
+```
+
+### 同步流程
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  try_sync_on_startup                                                     │
+│  ├── 检查 auth_mode == "local" && auth_admin_url 非空                   │
+│  └── 调用 sync_user_roles_from_admin                                     │
+│      ├── 1. 生成服务 JWT（sub="auth-service", exp=60s）                  │
+│      ├── 2. GET {auth_admin_url}/auth-admin/sync/user-roles              │
+│      │      (Header: Authorization: Bearer <service-jwt>)                │
+│      ├── 3. 解析 RespVO<Vec<UserRoleRule>> 响应                          │
+│      └── 4. replace_g_rules — 事务:                                      │
+│             DELETE FROM casbin_rules WHERE ptype = 'g'                    │
+│             INSERT INTO casbin_rules (ptype, v0, v1) VALUES ('g', ?, ?)  │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+---
 
 ### 原始结构体
 

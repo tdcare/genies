@@ -5,7 +5,9 @@
 pub mod user_service;
 pub mod role_service;
 pub mod application_service;
+pub mod app_instance_service;
 
 pub use user_service::UserDomainService;
 pub use role_service::RoleDomainService;
 pub use application_service::ApplicationDomainService;
+pub use app_instance_service::AppInstanceDomainService;

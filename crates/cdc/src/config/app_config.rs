@@ -60,11 +60,14 @@ pub struct ApplicationConfig {
     pub login_fail_retry_wait_sec: i64,
     /// keycloak 服务器秘钥
     // pub keycloak_auth_server_certs: String,
-    pub keycloak_auth_server_url: String,
-
-    pub keycloak_realm: String,
-    pub keycloak_resource: String,
-    pub keycloak_credentials_secret: String,
+    /// Keycloak 认证服务器 URL（auth_mode="keycloak" 时必填）
+    pub keycloak_auth_server_url: Option<String>,
+    /// Keycloak 领域名称（auth_mode="keycloak" 时必填）
+    pub keycloak_realm: Option<String>,
+    /// Keycloak 资源标识（auth_mode="keycloak" 时必填）
+    pub keycloak_resource: Option<String>,
+    /// Keycloak 客户端密钥（auth_mode="keycloak" 时必填）
+    pub keycloak_credentials_secret: Option<String>,
 
     /// dapr http 端口
     pub dapr_http_port: i64,
@@ -117,10 +120,10 @@ impl Default for ApplicationConfig {
             login_fail_retry: get_i64_cfg(&docs, "login_fail_retry"),
             login_fail_retry_wait_sec: get_i64_cfg(&docs, "login_fail_retry_wait_sec"),
             // keycloak_auth_server_certs: get_str_cfg(&docs, "keycloak_auth_server_certs"),
-            keycloak_auth_server_url: get_str_cfg(&docs, "keycloak_auth_server_url"),
-            keycloak_realm: get_str_cfg(&docs, "keycloak_realm"),
-            keycloak_resource: get_str_cfg(&docs, "keycloak_resource"),
-            keycloak_credentials_secret: get_str_cfg(&docs, "keycloak_credentials_secret"),
+            keycloak_auth_server_url: Some(get_str_cfg(&docs, "keycloak_auth_server_url")),
+            keycloak_realm: Some(get_str_cfg(&docs, "keycloak_realm")),
+            keycloak_resource: Some(get_str_cfg(&docs, "keycloak_resource")),
+            keycloak_credentials_secret: Some(get_str_cfg(&docs, "keycloak_credentials_secret")),
 
             dapr_http_port: get_i64_cfg(&docs, "dapr_http_port"),
             dapr_http: get_str_cfg(&docs, "dapr_http"),

@@ -18,6 +18,7 @@ pub type Result<T> = std::result::Result<T, crate::error::Error>;
 
 use crate::error::Error;
 // use actix_http::Response;
+use salvo::oapi::{Components, Content, EndpointOutRegister, Operation, Response as OapiResponse, ToResponse};
 use salvo::prelude::*;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -153,6 +154,30 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", serde_json::to_string(self).unwrap())
+    }
+}
+
+impl<T> ToResponse for RespVO<T>
+where
+    T: ToSchema + 'static,
+{
+    fn to_response(components: &mut Components) -> salvo::oapi::RefOr<OapiResponse> {
+        let schema = <Self as ToSchema>::to_schema(components);
+        OapiResponse::new("Response with json format data")
+            .add_content("application/json", Content::new(schema))
+            .into()
+    }
+}
+
+impl<T> EndpointOutRegister for RespVO<T>
+where
+    T: ToSchema + 'static,
+{
+    #[inline]
+    fn register(components: &mut Components, operation: &mut Operation) {
+        operation
+            .responses
+            .insert("200", Self::to_response(components));
     }
 }
 
@@ -317,6 +342,30 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", serde_json::to_string(self).unwrap())
+    }
+}
+
+impl<T> ToResponse for ResultDTO<T>
+where
+    T: ToSchema + 'static,
+{
+    fn to_response(components: &mut Components) -> salvo::oapi::RefOr<OapiResponse> {
+        let schema = <Self as ToSchema>::to_schema(components);
+        OapiResponse::new("Response with json format data")
+            .add_content("application/json", Content::new(schema))
+            .into()
+    }
+}
+
+impl<T> EndpointOutRegister for ResultDTO<T>
+where
+    T: ToSchema + 'static,
+{
+    #[inline]
+    fn register(components: &mut Components, operation: &mut Operation) {
+        operation
+            .responses
+            .insert("200", Self::to_response(components));
     }
 }
 //

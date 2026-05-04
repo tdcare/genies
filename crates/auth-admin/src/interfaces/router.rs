@@ -7,7 +7,7 @@ use salvo::prelude::*;
 
 use super::handler::{
     auth_handler, user_handler, role_handler, permission_handler, department_handler,
-    application_handler, app_proxy_handler, sync_handler,
+    application_handler, app_proxy_handler, instance_handler, sync_handler,
 };
 use super::admin_ui;
 use super::internal_auth::internal_auth_handler;
@@ -24,6 +24,7 @@ pub fn internal_routes() -> Router {
     Router::new()
         .hoop(internal_auth_handler)
         .push(sync_handler::internal_routes())
+        .push(instance_handler::internal_instance_routes())
 }
 
 /// 构建需要认证的受保护路由
@@ -36,4 +37,5 @@ pub fn protected_routes() -> Router {
         .push(department_handler::routes())
         .push(application_handler::routes())
         .push(app_proxy_handler::routes())
+        .push(instance_handler::protected_instance_routes())
 }

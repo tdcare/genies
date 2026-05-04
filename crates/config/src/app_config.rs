@@ -60,11 +60,18 @@ pub struct ApplicationConfig {
     // pub login_fail_retry_wait_sec: i64,
     /// keycloak 服务器秘钥
     // pub keycloak_auth_server_certs: String,
-    pub keycloak_auth_server_url: String,
-
-    pub keycloak_realm: String,
-    pub keycloak_resource: String,
-    pub keycloak_credentials_secret: String,
+    /// Keycloak 认证服务器 URL（auth_mode="keycloak" 时必填）
+    #[serde(default)]
+    pub keycloak_auth_server_url: Option<String>,
+    /// Keycloak 领域名称（auth_mode="keycloak" 时必填）
+    #[serde(default)]
+    pub keycloak_realm: Option<String>,
+    /// Keycloak 资源标识（auth_mode="keycloak" 时必填）
+    #[serde(default)]
+    pub keycloak_resource: Option<String>,
+    /// Keycloak 客户端密钥（auth_mode="keycloak" 时必填）
+    #[serde(default)]
+    pub keycloak_credentials_secret: Option<String>,
 
     /// 认证模式: "keycloak" | "local"，默认 keycloak
     #[serde(default = "default_auth_mode")]
@@ -94,11 +101,17 @@ pub struct ApplicationConfig {
     /// 雪花算法机器ID（可选，不配置时自动从 Redis/HOSTNAME 获取）
     pub machine_id: Option<i64>,
 
+    /// 心跳间隔秒数（默认30秒）
+    #[serde(default = "default_heartbeat_interval")]
+    pub heartbeat_interval: u64,
+
     // pub isPollWrite:i64,
     // pub printFlag: Option<i32>,
     // pub test_i64:Option<i64>,
     // pub test_string:Option<String>,
 }
+
+fn default_heartbeat_interval() -> u64 { 30 }
 
 fn default_auth_mode() -> String {
     "keycloak".to_string()

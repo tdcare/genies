@@ -162,6 +162,14 @@ async function handleViewMembers(row: DepartmentRecord) {
       row-key="id" :tree-props="{ children: 'children', hasChildren: 'hasChildren' }" default-expand-all>
       <el-table-column prop="name" label="部门名称" min-width="200" />
       <el-table-column prop="sort_order" label="排序" width="80" />
+      <el-table-column prop="member_count" label="成员数量" min-width="100">
+        <template #default="{ row }">
+          <el-link v-if="row.member_count" type="primary" :underline="false" @click="handleViewMembers(row)">
+            {{ row.member_count }}
+          </el-link>
+          <span v-else>0</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="description" label="描述" min-width="160" show-overflow-tooltip />
       <el-table-column label="状态" width="90">
         <template #default="{ row }">

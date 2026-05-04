@@ -35,17 +35,19 @@ create_timeout: 120
 #日志等级
 log_level: "debug,flyway=info"
 
-# JWT 配置（auth-admin 独有）
-jwt_secret: "auth_admin_jwt_secret_change_in_production"
 
 # 认证模式: 使用 auth-admin 本地JWT验证
 auth_mode: "local"
+auth_admin_url: "http://localhost:9099"
+# JWT 配置（auth-admin 独有）
+jwt_secret: "auth_admin_jwt_secret_change_in_production"
 
-# keycloak 参数
-keycloak_auth_server_url: "http://58.20.184.66:6015/auth/"
-keycloak_realm: "tdcare"
-keycloak_resource: "tdnis"
-keycloak_credentials_secret: "701ef8cd-43b9-407e-80df-0dfc96c461dc"
+
+# keycloak 参数（auth_mode="local" 时不需要配置）
+# keycloak_auth_server_url: "http://example.com/auth/"
+# keycloak_realm: "your-realm"
+# keycloak_resource: "your-resource"
+# keycloak_credentials_secret: "your-secret"
 
 
 ## Dapr 参数

@@ -5,7 +5,15 @@
 use rbatis::executor::Executor;
 use rbatis::py_sql;
 use rbatis::rbdc::db::ExecResult;
+use serde::{Deserialize, Serialize};
 use crate::domain::entity::user_department_entity::UserDepartment;
+
+/// 部门成员数量（用于 GROUP BY 查询结果）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DepartmentMemberCount {
+    pub department_id: i64,
+    pub count: i64,
+}
 
 impl UserDepartment {
     /// 查询用户所属的所有部门关联
@@ -40,6 +48,12 @@ impl UserDepartment {
     /// 删除指定用户-部门关联
     #[py_sql("DELETE FROM auth_admin_user_departments WHERE user_id = #{user_id} AND department_id = #{department_id}")]
     pub async fn remove_user_from_department(rb: &dyn Executor, user_id: &i64, department_id: &i64) -> rbatis::Result<ExecResult> {
+        impled!()
+    }
+
+    /// 查询所有部门的成员数量
+    #[py_sql("SELECT department_id, COUNT(*) AS count FROM auth_admin_user_departments GROUP BY department_id")]
+    pub async fn count_members_by_department(rb: &dyn Executor) -> rbatis::Result<Vec<DepartmentMemberCount>> {
         impled!()
     }
 }

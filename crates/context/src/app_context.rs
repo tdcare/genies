@@ -41,10 +41,10 @@ impl RemoteToken {
             }
         } else {
             // keycloak 模式：保持原有逻辑
-            let url = config.keycloak_auth_server_url.clone();
-            let realm = config.keycloak_realm.clone();
-            let resource = config.keycloak_resource.clone();
-            let secret = config.keycloak_credentials_secret.clone();
+            let url = config.keycloak_auth_server_url.clone().unwrap_or_default();
+            let realm = config.keycloak_realm.clone().unwrap_or_default();
+            let resource = config.keycloak_resource.clone().unwrap_or_default();
+            let secret = config.keycloak_credentials_secret.clone().unwrap_or_default();
             Self {
                 access_token: std::thread::spawn(move || {
                     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -209,8 +209,8 @@ impl ApplicationContext {
         let config = ApplicationConfig::from_sources("./application.yml").unwrap();
         log::debug!("config = {:?}", config);
        
-        let auth_url = config.keycloak_auth_server_url.clone();
-        let auth_realm = config.keycloak_realm.clone();
+        let auth_url = config.keycloak_auth_server_url.clone().unwrap_or_default();
+        let auth_realm = config.keycloak_realm.clone().unwrap_or_default();
         
         let cache_service = CacheService::new(&config);
         let redis_save_service = CacheService::new_saved(&config);
