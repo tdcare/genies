@@ -1,7 +1,7 @@
 # ============================================================
 # Stage 1: Builder
 # ============================================================
-FROM rust:1.87-bookworm AS builder
+FROM rust:1.90-bookworm AS builder
 
 WORKDIR /usr/src/genies
 
