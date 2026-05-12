@@ -843,7 +843,7 @@ pub async fn reload_enforcer(depot: &mut Depot) -> Json<ApiResponse<String>> {
 /// - `/auth/groups` - GET: 列出分组, POST: 添加分组
 /// - `/auth/groups/{id}` - DELETE: 删除分组
 /// - `/auth/reload` - POST: 手动重载 Enforcer
-pub fn auth_admin_router() -> Router {
+pub fn auth_router() -> Router {
     Router::with_path("/auth")
         .push(Router::with_path("/schemas").get(list_schemas))
         .push(Router::with_path("/model").get(get_model).put(update_model))

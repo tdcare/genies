@@ -12,7 +12,7 @@ use genies_auth::{LocalAuthConfig, verify_token};
 use crate::application::dto::{LoginRequest, LoginResponse, ChangePasswordRequest};
 use crate::application::service::AuthService;
 
-/// POST /auth-admin/login — 用户名密码登录，返回 JWT
+/// POST /login — 用户名密码登录，返回 JWT
 #[endpoint(tags("auth"), summary = "用户名密码登录")]
 pub async fn auth_login(
     body: JsonBody<LoginRequest>,
@@ -50,13 +50,13 @@ pub async fn auth_login(
     }
 }
 
-/// POST /auth-admin/logout — 登出（客户端丢弃 Token 即可）
+/// POST /logout — 登出（客户端丢弃 Token 即可）
 #[endpoint(tags("auth"), summary = "用户登出")]
 pub async fn auth_logout() -> Json<RespVO<()>> {
     Json(RespVO::from_error_info("0", "ok"))
 }
 
-/// GET /auth-admin/me — 获取当前登录用户信息
+/// GET /me — 获取当前登录用户信息
 #[endpoint(tags("auth"), summary = "获取当前登录用户信息")]
 pub async fn get_me(
     req: &mut Request,
@@ -95,7 +95,7 @@ pub async fn get_me(
     }
 }
 
-/// PUT /auth-admin/me/password — 修改当前用户密码
+/// PUT /me/password — 修改当前用户密码
 #[endpoint(tags("auth"), summary = "修改当前用户密码")]
 pub async fn change_password(
     body: JsonBody<ChangePasswordRequest>,
@@ -140,7 +140,7 @@ pub async fn change_password(
 
 /// 公开路由（登录、登出、刷新 Token）
 pub fn public_routes() -> Router {
-    Router::with_path("/auth-admin")
+    Router::new()
         .push(Router::with_path("/login").post(auth_login))
         .push(Router::with_path("/logout").post(auth_logout))
         .push(Router::with_path("/refresh").post(refresh_token))
@@ -148,12 +148,12 @@ pub fn public_routes() -> Router {
 
 /// 受保护路由（需要认证）
 pub fn protected_routes() -> Router {
-    Router::with_path("/auth-admin")
+    Router::new()
         .push(Router::with_path("/me").get(get_me))
         .push(Router::with_path("/me/password").put(change_password))
 }
 
-/// POST /auth-admin/refresh — 刷新 Token
+/// POST /refresh — 刷新 Token
 #[endpoint(tags("auth"), summary = "刷新 Token")]
 pub async fn refresh_token(
     req: &mut Request,

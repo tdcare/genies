@@ -44,7 +44,7 @@ genies_auth 是基于 Casbin 的完整 RBAC 权限管理库，提供 JWT 认证 
 - `LocalAuthConfig` - 本地 JWT 配置（secret + expiry）
 - `LocalClaims` - JWT Claims 结构体
 - `verify_token` - JWT 验证函数
-- `auth_admin_router` - 14 个 Admin API 端点（策略/角色/分组/模型 CRUD + reload + auth），支持 OpenAPI 元数据
+- `auth_router` - 14 个 Admin API 端点（策略/角色/分组/模型 CRUD + reload + auth），支持 OpenAPI 元数据
 - `auth_public_router` - 不需要认证的公共路由（如 `/auth/token`）
 - `RBatisAdapter` - MySQL Casbin Adapter
 - `extract_and_sync_schemas` - OpenApi Schema 自动同步
@@ -153,7 +153,7 @@ use std::sync::Arc;
 use genies::context::CONTEXT;
 use genies_auth::{
     EnforcerManager, LocalAuthConfig, combined_auth,
-    auth_admin_router, auth_public_router, extract_and_sync_schemas,
+    auth_router, auth_public_router, extract_and_sync_schemas,
 };
 
 // Init DB + migrations
@@ -179,7 +179,7 @@ let router = router
     .hoop(affix_state::inject(auth_config.clone()))  // inject JWT config
     .hoop(affix_state::inject(mgr.clone()))           // inject EnforcerManager
     .hoop(combined_auth)                              // JWT + Casbin in one
-    .push(auth_admin_router());                       // Admin API (protected)
+    .push(auth_router());                       // Admin API (protected)
 
 // Public routes (no auth required)
 let router = Router::new()
@@ -206,14 +206,14 @@ let router = Router::new()
 ```rust
 use std::sync::Arc;
 use genies::context::CONTEXT;
-use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router, extract_and_sync_schemas};
+use genies_auth::{EnforcerManager, casbin_auth, auth_router, extract_and_sync_schemas};
 
 let mgr = Arc::new(EnforcerManager::new().await.unwrap());
 let router = router
     .hoop(genies::context::auth::salvo_auth)       // Keycloak JWT
     .hoop(affix_state::inject(mgr.clone()))         // inject EnforcerManager
     .hoop(casbin_auth)                              // Casbin check
-    .push(auth_admin_router());                     // Admin API
+    .push(auth_router());                     // Admin API
 ```
 
 **中间件顺序必须是**: inject config/mgr → auth middleware
@@ -344,7 +344,7 @@ try_sync_on_startup(&config).await;
 
 **Sync flow:**
 1. Generate short-lived service JWT (60s expiry, sub=`"auth-service"`)
-2. `GET {auth_admin_url}/auth-admin/sync/user-roles` with Bearer token
+2. `GET {auth_admin_url}/sync/user-roles` with Bearer token
 3. Replace all `g` rules in `casbin_rules` (transaction: DELETE all → INSERT new)
 4. Failure is non-fatal (warns and continues with existing local rules)
 
@@ -375,7 +375,7 @@ let _guard = genies_auth::try_register_and_heartbeat(&CONTEXT.config).await;
 ### 工作流程
 
 1. 使用雪花ID生成器创建唯一 `instance_id`
-2. POST `{auth_admin_url}/auth-admin/internal/instances/register` 注册实例
+2. POST `{auth_admin_url}/internal/instances/register` 注册实例
 3. 后台 `tokio::spawn` 每 `heartbeat_interval` 秒 POST heartbeat
 4. `ServiceRegistryGuard` 在 Drop 时 best-effort 发送 deregister 请求并 abort 心跳任务
 5. 所有网络失败仅 warn 日志，不中断主流程
@@ -414,7 +414,7 @@ let _registry_guard = genies_auth::try_register_and_heartbeat(&CONTEXT.config).a
 | `/auth/groups` | POST | groups | Add group (JsonBody<PolicyDto>) |
 | `/auth/groups/{id}` | DELETE | groups | Delete group (PathParam<i64>) |
 | `/auth/reload` | POST | system | Reload enforcer |
-| `/auth/check` | POST | auth | Check permission |
+| `/auth/sync/receive-user-roles` | POST | sync | Receive user-role mapping sync |
 
 All mutations auto-trigger `mgr.reload()` + `version_sync::invalidate_and_reload()`.
 

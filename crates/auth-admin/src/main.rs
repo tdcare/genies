@@ -14,7 +14,7 @@ use genies::context::CONTEXT;
 use genies::k8s::k8s_health_check;
 use genies_auth::{
     LocalAuthConfig, EnforcerManager,
-    casbin_auth, auth_admin_router, extract_and_sync_schemas,
+    casbin_auth, auth_router, extract_and_sync_schemas,
 };
 
 #[tokio::main]
@@ -65,7 +65,7 @@ async fn main() {
         .hoop(affix_state::inject(mgr.clone()))
         .hoop(casbin_auth)
         .push(genies_auth_admin::interfaces::router::protected_routes())
-        .push(auth_admin_router());
+        .push(auth_router());
 
     let router = Router::new()
         .push(public_router)
@@ -113,8 +113,13 @@ async fn main() {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
         loop {
             interval.tick().await;
+            // 标记超过90秒未心跳的实例为离线
             if let Err(e) = genies_auth_admin::domain::service::AppInstanceDomainService::cleanup_stale(90).await {
                 log::warn!("[auth-admin] Failed to cleanup stale instances: {}", e);
+            }
+            // 删除离线超过1小时的实例
+            if let Err(e) = genies_auth_admin::domain::service::AppInstanceDomainService::delete_stale_instances(3600).await {
+                log::warn!("[auth-admin] Failed to delete stale instances: {}", e);
             }
         }
     });

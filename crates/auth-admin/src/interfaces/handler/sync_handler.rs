@@ -9,11 +9,11 @@ use crate::domain::entity::UserRoleMapping;
 
 /// 内部路由（服务间调用）
 pub fn internal_routes() -> Router {
-    Router::with_path("/auth-admin")
+    Router::new()
         .push(Router::with_path("/sync/user-roles").get(list_user_roles))
 }
 
-/// GET /auth-admin/sync/user-roles — 导出所有启用状态的用户-角色映射（casbin 'g' 规则）
+/// GET /sync/user-roles — 导出所有启用状态的用户-角色映射（casbin 'g' 规则）
 #[endpoint(tags("sync"), summary = "导出用户-角色映射")]
 pub async fn list_user_roles() -> Json<RespVO<Vec<UserRoleMapping>>> {
     match SyncAppService::list_active_user_roles().await {

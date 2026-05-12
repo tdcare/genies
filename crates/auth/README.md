@@ -25,7 +25,7 @@ genies_auth provides a complete role-based access control (RBAC) solution with b
 |-----------|------|-------------|
 | `EnforcerManager` | enforcer_manager.rs | Casbin Enforcer manager with hot reload, `RwLock<Arc<Enforcer>>` for concurrency safety |
 | `casbin_auth` | middleware.rs | Salvo middleware for JWT auth + Casbin permission check, injects enforcer/subject into Depot |
-| `auth_admin_router` | admin_api.rs | Admin API router (14 endpoints with OpenAPI annotations for policy/role/group/model CRUD + reload) |
+| `auth_router` | admin_api.rs | Admin API router (14 endpoints with OpenAPI annotations for policy/role/group/model CRUD + reload) |
 | `RBatisAdapter` | adapter.rs | Casbin Adapter implementation backed by MySQL |
 | `extract_and_sync_schemas` | schema_extractor.rs | Extract schemas from OpenAPI docs and sync to database |
 | `version_sync` | version_sync.rs | Enforcer multi-instance version sync via Redis (`invalidate_and_reload()`, `get_enforcer_version()`) |
@@ -77,7 +77,7 @@ The `#[casbin]` macro automatically generates:
 use std::sync::Arc;
 use salvo::prelude::*;
 use genies::context::CONTEXT;
-use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router, extract_and_sync_schemas};
+use genies_auth::{EnforcerManager, casbin_auth, auth_router, extract_and_sync_schemas};
 
 #[endpoint]
 async fn get_user() -> Json<User> {
@@ -111,7 +111,7 @@ async fn main() {
         .hoop(genies::context::auth::salvo_auth)
         .hoop(affix_state::inject(mgr.clone()))
         .hoop(casbin_auth)
-        .push(auth_admin_router());
+        .push(auth_router());
     
     let acceptor = TcpListener::new("0.0.0.0:5800").bind().await;
     Server::new(acceptor).serve(router).await;

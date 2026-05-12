@@ -120,7 +120,7 @@ pub struct Device {
 impl Device {
     /// 工厂方法 - 创建设备（类似 Java 聚合根的静态 create 方法）
     pub fn create(name: String, serial_number: String) -> (Self, DeviceCreatedEvent) {
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = genies::next_id();
         let device = Self { id: id.clone(), name: name.clone(), serial_number, status: 0 };
         let event = DeviceCreatedEvent { id, name, created_at: chrono::Utc::now().timestamp_millis() };
         (device, event)
@@ -315,7 +315,7 @@ use genies::copy;
 // 接收请求 DTO，转为 Entity 写入数据库
 let req: DeviceCreateRequest = req.parse_json().await.unwrap();
 let mut entity: DeviceEntity = copy!(&req, DeviceEntity);
-entity.id = Some(uuid::Uuid::new_v4().to_string());
+entity.id = Some(genies::next_id());
 entity.created_at = Some(chrono::Utc::now().timestamp_millis());
 DeviceEntity::insert(rb, &entity).await.unwrap();
 ```
@@ -740,7 +740,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
-uuid = { version = "1", features = ["v4"] }
 log = "0.4"
 anyhow = "1.0"
 ```
@@ -1024,6 +1023,7 @@ impl DrugAdviceEntity {
 
 ## 13. 最佳实践
 
+- **新项目统一使用雪花 ID（`genies::next_id()`）作为实体/聚合根 ID**。雪花 ID 是 Java `UUID.randomUUID()` 的功能平替，用于生成分布式唯一 ID。在核心库中使用 `genies_core::id_gen::next_id()`。从 Java 迁移时，若已有数据使用 UUID 且雪花 ID 无法兼容，可继续使用 UUID 保持数据兼容性。新功能开发不应引入 `uuid` crate。
 - **聚合根**应包含业务规则验证，工厂方法返回 `(Entity, Event)` 元组
 - **域服务**处理跨实体逻辑，不直接暴露给接口层
 - **应用服务**编排用例，管理事务边界（`acquire_begin` / `commit`）

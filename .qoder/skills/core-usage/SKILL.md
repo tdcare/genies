@@ -348,6 +348,8 @@ keycloak_credentials_secret: "your-client-secret"
 
 The `id_gen` module provides globally unique Snowflake IDs.
 
+> **规则：新项目统一使用雪花 ID（`id_gen`）作为实体/聚合根 ID。** 雪花 ID 是 Java `UUID.randomUUID()` 的功能平替，用于生成分布式唯一 ID。项目中所有新功能需要生成唯一 ID 的地方，都应调用 `genies::next_id()` 或 `genies_core::id_gen::next_id()`。从 Java 迁移时，若已有数据使用 UUID 且雪花 ID 无法兼容，可继续使用 UUID 保持数据兼容性。新功能开发不应引入 `uuid` crate。
+
 ### API
 
 - `genies_core::id_gen::init(machine_id: i32, datacenter_id: i32)` — Initialize (auto-called by `ApplicationContext`)

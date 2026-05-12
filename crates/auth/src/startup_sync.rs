@@ -76,7 +76,7 @@ pub async fn replace_g_rules(rules: &[(String, String)]) -> anyhow::Result<usize
 /// 从 auth-admin 拉取用户-角色映射并全量替换本地 casbin_rules 中的 g 规则
 ///
 /// # 逻辑
-/// 1. HTTP GET `{auth_admin_url}/auth-admin/sync/user-roles`
+/// 1. HTTP GET `{auth_admin_url}/sync/user-roles`
 /// 2. 解析 JSON 响应中的 g 规则列表
 /// 3. 事务内：先删除所有旧 g 规则，再批量插入新规则
 ///
@@ -84,7 +84,7 @@ pub async fn replace_g_rules(rules: &[(String, String)]) -> anyhow::Result<usize
 /// * `Ok(count)` - 成功同步的规则条数
 /// * `Err(_)` - HTTP 请求或数据库操作失败
 pub async fn sync_user_roles_from_admin(auth_admin_url: &str, jwt_secret: &str) -> anyhow::Result<usize> {
-    let url = format!("{}/auth-admin/sync/user-roles", auth_admin_url.trim_end_matches('/'));
+    let url = format!("{}/sync/user-roles", auth_admin_url.trim_end_matches('/'));
 
     // 生成短期服务 JWT（60 秒有效期）
     let now = std::time::SystemTime::now()

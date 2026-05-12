@@ -57,6 +57,14 @@ impl AppInstanceEntity {
     }
 
     #[py_sql("
+        DELETE FROM auth_app_instances
+        WHERE status = 0 AND last_heartbeat_at < DATE_SUB(NOW(), INTERVAL #{threshold_seconds} SECOND)
+    ")]
+    pub async fn delete_offline_older_than(rb: &dyn Executor, threshold_seconds: &i64) -> rbatis::Result<ExecResult> {
+        impled!()
+    }
+
+    #[py_sql("
         SELECT COUNT(*) FROM auth_app_instances
         WHERE app_name = #{app_name}
     ")]

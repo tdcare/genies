@@ -710,7 +710,7 @@ pub use middleware::casbin_auth;
 pub use middleware::casbin_filter_object;
 
 // 路由构建器
-pub use admin_api::auth_admin_router;    // 需认证的管理 API
+pub use admin_api::auth_router;    // 需认证的管理 API
 pub use admin_api::auth_public_router;   // 公开 API（Token 端点）
 
 // Schema 同步
@@ -883,7 +883,7 @@ REMOTE_TOKEN.lock().unwrap().access_token = "new_token".to_string();
 ```rust
 use genies::context::CONTEXT;
 use genies_auth::{
-    auth_admin_router, auth_public_router,
+    auth_router, auth_public_router,
     casbin_auth, extract_and_sync_schemas, EnforcerManager,
 };
 use genies_derive::casbin;
@@ -928,7 +928,7 @@ async fn main() {
         .hoop(genies::context::auth::salvo_auth)
         .hoop(affix_state::inject(mgr.clone()))
         .hoop(casbin_auth)
-        .push(auth_admin_router());
+        .push(auth_router());
 
     let router = Router::new()
         .push(protected_router)

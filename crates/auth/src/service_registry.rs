@@ -114,7 +114,7 @@ fn build_client() -> reqwest::Client {
 
 /// 启动时注册实例到 auth-admin
 ///
-/// POST `{auth_admin_url}/auth-admin/internal/instances/register`
+/// POST `{auth_admin_url}/internal/instances/register`
 pub async fn register_instance(
     auth_admin_url: &str,
     jwt_secret: &str,
@@ -122,9 +122,8 @@ pub async fn register_instance(
     config: &ApplicationConfig,
 ) -> anyhow::Result<()> {
     let url = format!(
-        "{}/auth-admin/internal/instances/register",
-        auth_admin_url.trim_end_matches('/')
-    );
+        "{}/internal/instances/register",
+        auth_admin_url.trim_end_matches('/'));
 
     let token = get_local_service_token(jwt_secret)?;
 
@@ -164,16 +163,15 @@ pub async fn register_instance(
 
 /// 发送单次心跳
 ///
-/// POST `{auth_admin_url}/auth-admin/internal/instances/heartbeat`
+/// POST `{auth_admin_url}/internal/instances/heartbeat`
 pub async fn send_heartbeat(
     auth_admin_url: &str,
     jwt_secret: &str,
     instance_id: i64,
 ) -> anyhow::Result<()> {
     let url = format!(
-        "{}/auth-admin/internal/instances/heartbeat",
-        auth_admin_url.trim_end_matches('/')
-    );
+        "{}/internal/instances/heartbeat",
+        auth_admin_url.trim_end_matches('/'));
 
     let token = get_local_service_token(jwt_secret)?;
 
@@ -207,16 +205,15 @@ pub async fn send_heartbeat(
 
 /// 发送注销请求
 ///
-/// POST `{auth_admin_url}/auth-admin/internal/instances/deregister`
+/// POST `{auth_admin_url}/internal/instances/deregister`
 pub async fn deregister_instance(
     auth_admin_url: &str,
     jwt_secret: &str,
     instance_id: i64,
 ) -> anyhow::Result<()> {
     let url = format!(
-        "{}/auth-admin/internal/instances/deregister",
-        auth_admin_url.trim_end_matches('/')
-    );
+        "{}/internal/instances/deregister",
+        auth_admin_url.trim_end_matches('/'));
 
     let token = get_local_service_token(jwt_secret)?;
 

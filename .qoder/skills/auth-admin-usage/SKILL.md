@@ -387,7 +387,7 @@ let protected_router = Router::new()
     .hoop(affix_state::inject(mgr.clone()))   // Inject EnforcerManager
     .hoop(casbin_auth)                        // Casbin permission check
     .push(genies_auth_admin::interfaces::router::protected_routes())
-    .push(auth_admin_router());               // genies_auth Admin API (14 endpoints)
+    .push(auth_router());               // genies_auth Admin API (14 endpoints)
 ```
 
 The middleware chain: `local_auth` (JWT) → `inject(EnforcerManager)` → `casbin_auth` (Casbin check)

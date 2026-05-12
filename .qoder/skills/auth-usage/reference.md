@@ -25,7 +25,7 @@ Auth 模块 - 权限管理系统
 - casbin_auth - API Casbin 权限中间件
 - local_auth - JWT 认证中间件
 - combined_auth - 组合认证+授权中间件（JWT + Casbin）
-- auth_admin_router - Admin API 路由
+- auth_router - Admin API 路由
 - auth_public_router - 公共路由（无需认证）
 - extract_and_sync_schemas - Schema 同步函数
 - event_handler - Dapr 事件订阅处理
@@ -382,7 +382,7 @@ pub async fn replace_g_rules(rules: &[(String, String)]) -> anyhow::Result<usize
 │  ├── 检查 auth_mode == "local" && auth_admin_url 非空                   │
 │  └── 调用 sync_user_roles_from_admin                                     │
 │      ├── 1. 生成服务 JWT（sub="auth-service", exp=60s）                  │
-│      ├── 2. GET {auth_admin_url}/auth-admin/sync/user-roles              │
+│      ├── 2. GET {auth_admin_url}/sync/user-roles              │
 │      │      (Header: Authorization: Bearer <service-jwt>)                │
 │      ├── 3. 解析 RespVO<Vec<UserRoleRule>> 响应                          │
 │      └── 4. replace_g_rules — 事务:                                      │
@@ -773,7 +773,7 @@ Auth 模块的 Admin API 端点
 | `/auth/groups` | POST | groups | 添加资源到分组的映射（ptype='g2'） | 添加对象分组 |
 | `/auth/groups/{id}` | DELETE | groups | 移除对象分组（PathParam<i64>） | 移除对象分组 |
 | `/auth/reload` | POST | system | 手动触发 Enforcer 重载 | 重载权限引擎 |
-| `/auth/check` | POST | auth | 检查权限 | 权限检查 |
+| `/auth/sync/receive-user-roles` | POST | sync | 接收用户-角色映射同步 | 接收角色同步 |
 
 ### SwaggerUI 集成
 

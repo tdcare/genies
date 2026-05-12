@@ -446,7 +446,7 @@ async fn get_user() -> UserVO {
 ### API 级权限中间件
 
 ```rust
-use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router};
+use genies_auth::{EnforcerManager, casbin_auth, auth_router};
 use genies::context::auth::salvo_auth;
 use salvo::prelude::*;
 use std::sync::Arc;
@@ -460,7 +460,7 @@ let router = Router::new()
     .hoop(salvo_auth)                          // 1. JWT 认证
     .hoop(affix_state::inject(mgr.clone()))    // 2. 注入 EnforcerManager
     .hoop(casbin_auth)                         // 3. Casbin 权限检查
-    .push(auth_admin_router());                // Admin API（可选）
+    .push(auth_router());                // Admin API（可选）
 ```
 
 ### Casbin 策略示例
@@ -483,7 +483,7 @@ INSERT INTO casbin_rules (ptype,v0,v1) VALUES ('g','alice','admin');
 ```rust
 use genies::context::CONTEXT;
 use genies_auth::{
-    auth_admin_router, auth_public_router,
+    auth_router, auth_public_router,
     casbin_auth, extract_and_sync_schemas, EnforcerManager,
 };
 use salvo::prelude::*;
@@ -513,7 +513,7 @@ async fn main() {
         .hoop(genies::context::auth::salvo_auth)
         .hoop(affix_state::inject(mgr.clone()))
         .hoop(casbin_auth)
-        .push(auth_admin_router());
+        .push(auth_router());
 
     // 6. 组装完整路由
     let router = Router::new()
@@ -590,4 +590,5 @@ anyhow = "1"
 | API 权限 | `.hoop(salvo_auth).hoop(inject(mgr)).hoop(casbin_auth)` |
 | Dapr 路由 | `router.push(dapr_event_router())` |
 | K8s 探针 | `router.push(genies::k8s::k8s_health_check())` |
+| 生成唯一 ID | `genies::next_id()`（雪花 ID，新项目优先；迁移项目若已有 UUID 数据且无法兼容可保留 UUID） |
 | SQL 文件命名 | `V<N>__<desc>.sql` |

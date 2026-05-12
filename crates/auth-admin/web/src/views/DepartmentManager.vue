@@ -4,8 +4,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus, Delete, Edit, Top, User } from '@element-plus/icons-vue'
 import {
   getDepartments, createDepartment, updateDepartment, deleteDepartment, moveDepartment,
-  getDepartmentUsers,
-  type DepartmentRecord
+  getDepartmentUsers, addDepartmentUser, removeDepartmentUser, getUsers,
+  type DepartmentRecord, type UserRecord
 } from '../api'
 
 const loading = ref(false)
@@ -128,10 +128,12 @@ onMounted(() => { loadDepts() })
 // 查看部门成员
 const memberDialogVisible = ref(false)
 const memberLoading = ref(false)
+const currentDeptId = ref(0)
 const currentDeptName = ref('')
 const departmentMembers = ref<any[]>([])
 
 async function handleViewMembers(row: DepartmentRecord) {
+  currentDeptId.value = row.id
   currentDeptName.value = row.name
   memberDialogVisible.value = true
   memberLoading.value = true
@@ -141,6 +143,60 @@ async function handleViewMembers(row: DepartmentRecord) {
     ElMessage.error('获取部门成员失败: ' + (e.message || e))
   } finally {
     memberLoading.value = false
+  }
+}
+
+// 移除成员
+async function handleRemoveMember(row: any) {
+  try {
+    await removeDepartmentUser(currentDeptId.value, row.id)
+    ElMessage.success('移除成功')
+    departmentMembers.value = await getDepartmentUsers(currentDeptId.value)
+  } catch (e: any) {
+    ElMessage.error(e.message || '移除失败')
+  }
+}
+
+// 添加成员
+const addMemberVisible = ref(false)
+const addMemberLoading = ref(false)
+const addMemberKeyword = ref('')
+const allUsers = ref<UserRecord[]>([])
+
+const availableUsers = computed(() => {
+  const memberIds = new Set(departmentMembers.value.map((m: any) => m.id))
+  let list = allUsers.value.filter(u => !memberIds.has(u.id))
+  const kw = addMemberKeyword.value.trim().toLowerCase()
+  if (kw) {
+    list = list.filter(u =>
+      u.username.toLowerCase().includes(kw) ||
+      (u.display_name && u.display_name.toLowerCase().includes(kw))
+    )
+  }
+  return list
+})
+
+async function openAddMemberDialog() {
+  addMemberVisible.value = true
+  addMemberKeyword.value = ''
+  addMemberLoading.value = true
+  try {
+    const result = await getUsers({ page: 1, size: 9999 })
+    allUsers.value = result.list
+  } catch (e: any) {
+    ElMessage.error('获取用户列表失败: ' + (e.message || e))
+  } finally {
+    addMemberLoading.value = false
+  }
+}
+
+async function handleAddMember(user: UserRecord) {
+  try {
+    await addDepartmentUser(currentDeptId.value, user.id)
+    ElMessage.success(`已添加 ${user.display_name || user.username}`)
+    departmentMembers.value = await getDepartmentUsers(currentDeptId.value)
+  } catch (e: any) {
+    ElMessage.error(e.message || '添加失败')
   }
 }
 </script>
@@ -234,11 +290,14 @@ async function handleViewMembers(row: DepartmentRecord) {
     </el-dialog>
 
     <!-- 部门成员弹窗 -->
-    <el-dialog v-model="memberDialogVisible" :title="`部门成员 - ${currentDeptName}`" width="700px">
+    <el-dialog v-model="memberDialogVisible" :title="`部门成员 - ${currentDeptName}`" width="750px">
+      <div style="margin-bottom: 12px; text-align: right;">
+        <el-button type="primary" size="small" @click="openAddMemberDialog">+ 添加成员</el-button>
+      </div>
       <el-table v-loading="memberLoading" :data="departmentMembers" border stripe>
         <el-table-column prop="username" label="用户名" min-width="120" />
         <el-table-column prop="display_name" label="显示名称" min-width="120" />
-        <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="email" label="邮箱" min-width="160" show-overflow-tooltip />
         <el-table-column prop="phone" label="手机号" min-width="130" />
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
@@ -247,12 +306,43 @@ async function handleViewMembers(row: DepartmentRecord) {
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ row }">
+            <el-popconfirm title="确定要将该用户从部门移除吗？" @confirm="handleRemoveMember(row)">
+              <template #reference>
+                <el-button type="danger" size="small" link>移除</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
         <template #empty>
           <el-empty description="该部门暂无成员" :image-size="80" />
         </template>
       </el-table>
       <template #footer>
         <el-button @click="memberDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 添加成员弹窗 -->
+    <el-dialog v-model="addMemberVisible" title="添加成员" width="600px" append-to-body>
+      <el-input v-model="addMemberKeyword" placeholder="搜索用户名 / 显示名称" clearable
+        style="margin-bottom: 12px;" />
+      <el-table v-loading="addMemberLoading" :data="availableUsers" border stripe max-height="400px">
+        <el-table-column prop="username" label="用户名" min-width="120" />
+        <el-table-column prop="display_name" label="显示名称" min-width="120" />
+        <el-table-column prop="email" label="邮箱" min-width="160" show-overflow-tooltip />
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" size="small" link @click="handleAddMember(row)">添加</el-button>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="没有可添加的用户" :image-size="60" />
+        </template>
+      </el-table>
+      <template #footer>
+        <el-button @click="addMemberVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>

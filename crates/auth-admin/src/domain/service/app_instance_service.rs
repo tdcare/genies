@@ -100,4 +100,12 @@ impl AppInstanceDomainService {
             .await
             .map_err(|e| e.to_string())
     }
+
+    /// 删除离线超过指定时间的实例
+    pub async fn delete_stale_instances(threshold_seconds: i64) -> Result<ExecResult, String> {
+        let rb = &CONTEXT.rbatis;
+        AppInstanceEntity::delete_offline_older_than(rb, &threshold_seconds)
+            .await
+            .map_err(|e| e.to_string())
+    }
 }

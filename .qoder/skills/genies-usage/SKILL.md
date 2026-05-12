@@ -672,7 +672,7 @@ extract_and_sync_schemas(&doc).await.ok();
 
 6. **启动服务**
    ```rust
-   use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router};
+   use genies_auth::{EnforcerManager, casbin_auth, auth_router};
    
    #[tokio::main]
    async fn main() {
@@ -689,7 +689,7 @@ extract_and_sync_schemas(&doc).await.ok();
                .hoop(affix_state::inject(mgr.clone()))
                .hoop(casbin_auth)
                .push(business_router())
-               .push(auth_admin_router()))  // 权限管理 API
+               .push(auth_router()))  // 权限管理 API
            .push(genies::dapr_event_router());  // Dapr 事件路由
        
        let acceptor = TcpListener::new(&CONTEXT.config.server_url).bind().await;
@@ -713,14 +713,14 @@ extract_and_sync_schemas(&doc).await.ok();
 | `EnforcerManager` | Casbin Enforcer 管理器，支持热更新 |
 | `casbin_auth` | API 接口权限中间件 |
 | `casbin_filter_object` | 嵌套字段过滤函数 |
-| `auth_admin_router()` | Admin API 路由（需认证） |
+| `auth_router()` | Admin API 路由（需认证） |
 | `auth_public_router()` | 公开 API 路由（Token 端点） |
 | `extract_and_sync_schemas()` | OpenAPI Schema 同步到数据库 |
 
 ### 快速集成
 
 ```rust
-use genies_auth::{EnforcerManager, casbin_auth, auth_admin_router};
+use genies_auth::{EnforcerManager, casbin_auth, auth_router};
 use std::sync::Arc;
 
 // 1. 初始化 Enforcer
@@ -730,14 +730,16 @@ let mgr = Arc::new(EnforcerManager::new().await?);
 let router = Router::new()
     .hoop(affix_state::inject(mgr.clone()))
     .hoop(casbin_auth)
-    .push(auth_admin_router());   // /auth/policies, /auth/roles, ...
+    .push(auth_router());   // /auth/policies, /auth/roles, ...
 ```
 
 > **注意：** 管理界面（Admin UI）已迁移到独立的 `genies_auth_admin` crate，详见 auth-admin 的文档。
 
 ## 17. ID 生成
 
-Genies 提供了统一的雪花 ID 生成器，用于替代 UUID 生成所有业务 ID。
+Genies 提供了统一的雪花 ID 生成器，用于新项目生成所有业务 ID。
+
+> **规则：新项目统一使用雪花 ID（`genies::next_id()`）作为实体/聚合根 ID。** 雪花 ID 是 Java `UUID.randomUUID()` 的功能平替，用于生成分布式唯一 ID。使用方式：`genies::next_id()`（业务代码）或 `genies_core::id_gen::next_id()`（核心库）。从 Java 迁移时，若已有数据使用 UUID 且雪花 ID 无法兼容，可继续使用 UUID 保持数据兼容性。新功能开发不应引入 `uuid` crate。
 
 ### 用法
 
@@ -768,4 +770,4 @@ let id = Uuid::new_v4().to_string();
 let id = genies::next_id();
 ```
 
-迁移完成后，从 `Cargo.toml` 依赖中移除 `uuid`。
+迁移完成后，若无已有 UUID 数据需要兼容，可从 `Cargo.toml` 依赖中移除 `uuid`。

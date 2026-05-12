@@ -43,3 +43,9 @@ pub struct ChangePasswordRequest {
     pub old_password: String,
     pub new_password: String,
 }
+
+/// 添加部门成员请求
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AddMemberRequest {
+    pub user_id: i64,
+}

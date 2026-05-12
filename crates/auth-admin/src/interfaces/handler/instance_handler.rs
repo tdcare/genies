@@ -18,13 +18,13 @@ use crate::interfaces::dto::instance_dto::{
 
 /// 内部路由：注册/心跳/注销
 pub fn internal_instance_routes() -> Router {
-    Router::with_path("/auth-admin/internal/instances")
+    Router::with_path("/internal/instances")
         .push(Router::with_path("register").post(register_instance))
         .push(Router::with_path("heartbeat").post(heartbeat))
         .push(Router::with_path("deregister").post(deregister_instance))
 }
 
-/// POST /auth-admin/internal/instances/register — 注册或更新实例
+/// POST /internal/instances/register — 注册或更新实例
 #[endpoint(tags("instances"), summary = "注册或更新实例")]
 pub async fn register_instance(body: JsonBody<RegisterInstanceRequest>) -> Json<RespVO<String>> {
     let req = body.into_inner();
@@ -46,7 +46,7 @@ pub async fn register_instance(body: JsonBody<RegisterInstanceRequest>) -> Json<
     }
 }
 
-/// POST /auth-admin/internal/instances/heartbeat — 心跳
+/// POST /internal/instances/heartbeat — 心跳
 #[endpoint(tags("instances"), summary = "实例心跳")]
 pub async fn heartbeat(body: JsonBody<HeartbeatRequest>) -> Json<RespVO<String>> {
     let req = body.into_inner();
@@ -56,7 +56,7 @@ pub async fn heartbeat(body: JsonBody<HeartbeatRequest>) -> Json<RespVO<String>>
     }
 }
 
-/// POST /auth-admin/internal/instances/deregister — 注销实例
+/// POST /internal/instances/deregister — 注销实例
 #[endpoint(tags("instances"), summary = "注销实例")]
 pub async fn deregister_instance(body: JsonBody<DeregisterRequest>) -> Json<RespVO<String>> {
     let req = body.into_inner();
@@ -72,16 +72,16 @@ pub async fn deregister_instance(body: JsonBody<DeregisterRequest>) -> Json<Resp
 pub fn protected_instance_routes() -> Router {
     Router::new()
         .push(
-            Router::with_path("/auth-admin/apps/{app_id}/instances")
+            Router::with_path("/apps/{app_id}/instances")
                 .get(list_app_instances),
         )
         .push(
-            Router::with_path("/auth-admin/instances")
+            Router::with_path("/instances")
                 .get(list_all_instances),
         )
 }
 
-/// GET /auth-admin/apps/{app_id}/instances — 查询指定应用的实例列表
+/// GET /apps/{app_id}/instances — 查询指定应用的实例列表
 #[endpoint(tags("instances"), summary = "查询应用实例列表")]
 pub async fn list_app_instances(app_id: PathParam<i64>) -> Json<RespVO<Vec<InstanceVO>>> {
     let rb = &CONTEXT.rbatis;
@@ -105,7 +105,7 @@ pub async fn list_app_instances(app_id: PathParam<i64>) -> Json<RespVO<Vec<Insta
     }
 }
 
-/// GET /auth-admin/instances — 分页查询所有实例
+/// GET /instances — 分页查询所有实例
 #[endpoint(tags("instances"), summary = "分页查询所有实例")]
 pub async fn list_all_instances(
     page: QueryParam<u64, false>,

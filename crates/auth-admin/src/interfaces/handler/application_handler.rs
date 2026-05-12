@@ -15,15 +15,20 @@ use crate::interfaces::dto::application_dto::{
 
 /// 应用管理路由
 pub fn routes() -> Router {
-    Router::with_path("/auth-admin/apps")
+    let mut id_router = Router::with_path("{id}")
+        .get(get_app)
+        .put(update_app)
+        .delete(delete_app);
+
+    // 合并代理子路由到 {id} 节点，避免参数路由冲突
+    for sub in super::app_proxy_handler::proxy_sub_routes() {
+        id_router = id_router.push(sub);
+    }
+
+    Router::with_path("/apps")
         .get(list_apps)
         .post(create_app)
-        .push(
-            Router::with_path("{id}")
-                .get(get_app)
-                .put(update_app)
-                .delete(delete_app)
-        )
+        .push(id_router)
 }
 
 /// 从 Depot 中获取 casbin enforcer 和 subject，对 JSON Value 进行字段级权限过滤
@@ -52,7 +57,7 @@ fn apply_casbin_filter(depot: &Depot, value: &mut serde_json::Value) {
     }
 }
 
-/// GET /auth-admin/apps — 分页应用列表
+/// GET /apps — 分页应用列表
 #[endpoint(tags("apps"), summary = "分页应用列表")]
 pub async fn list_apps(
     page: QueryParam<u64, false>,
@@ -76,7 +81,7 @@ pub async fn list_apps(
     }
 }
 
-/// GET /auth-admin/apps/{id} — 应用详情
+/// GET /apps/{id} — 应用详情
 #[endpoint(tags("apps"), summary = "获取应用详情")]
 pub async fn get_app(id: PathParam<i64>, depot: &mut Depot) -> Json<RespVO<ApplicationVO>> {
     match ApplicationAppService::get_app(id.into_inner()).await {
@@ -92,7 +97,7 @@ pub async fn get_app(id: PathParam<i64>, depot: &mut Depot) -> Json<RespVO<Appli
     }
 }
 
-/// POST /auth-admin/apps — 创建应用
+/// POST /apps — 创建应用
 #[endpoint(tags("apps"), summary = "创建应用")]
 pub async fn create_app(body: JsonBody<CreateApplicationRequest>) -> Json<RespVO<serde_json::Value>> {
     let req = body.into_inner();
@@ -108,7 +113,7 @@ pub async fn create_app(body: JsonBody<CreateApplicationRequest>) -> Json<RespVO
     }
 }
 
-/// PUT /auth-admin/apps/{id} — 更新应用
+/// PUT /apps/{id} — 更新应用
 #[endpoint(tags("apps"), summary = "更新应用")]
 pub async fn update_app(id: PathParam<i64>, body: JsonBody<UpdateApplicationRequest>) -> Json<RespVO<()>> {
     let req = body.into_inner();
@@ -132,7 +137,7 @@ pub async fn update_app(id: PathParam<i64>, body: JsonBody<UpdateApplicationRequ
     }
 }
 
-/// DELETE /auth-admin/apps/{id} — 删除应用
+/// DELETE /apps/{id} — 删除应用
 #[endpoint(tags("apps"), summary = "删除应用")]
 pub async fn delete_app(id: PathParam<i64>) -> Json<RespVO<()>> {
     match ApplicationAppService::delete_app(id.into_inner()).await {

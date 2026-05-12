@@ -675,6 +675,24 @@ impl UserDepartmentAppService {
         Ok(())
     }
 
+    /// 添加单个用户到部门
+    pub async fn add_user_to_department(department_id: i64, user_id: i64) -> Result<(), String> {
+        let rb = &CONTEXT.rbatis;
+        UserDepartment::batch_insert(rb, &user_id, &[department_id])
+            .await
+            .map_err(|e| format!("添加部门成员失败: {}", e))?;
+        Ok(())
+    }
+
+    /// 从部门移除单个用户
+    pub async fn remove_user_from_department(department_id: i64, user_id: i64) -> Result<(), String> {
+        let rb = &CONTEXT.rbatis;
+        UserDepartment::remove_user_from_department(rb, &user_id, &department_id)
+            .await
+            .map_err(|e| format!("移除部门成员失败: {}", e))?;
+        Ok(())
+    }
+
     /// 获取部门成员列表（返回 AdminUser 对象列表）
     pub async fn get_department_users(department_id: i64) -> Result<Vec<AdminUser>, String> {
         let rb = &CONTEXT.rbatis;

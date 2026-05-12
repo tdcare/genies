@@ -12,6 +12,7 @@ use rust_embed::Embed;
 use salvo::http::header::{CACHE_CONTROL, CONTENT_TYPE};
 use salvo::http::ResBody;
 use salvo::prelude::*;
+// `Redirect` 不再需要，已移除 trailing-slash 重定向以避免 nginx 反代场景丢失前缀
 
 /// 嵌入 static/ 目录下的所有前端资源
 #[derive(Embed)]
@@ -67,22 +68,21 @@ fn serve_embedded_file(res: &mut Response, path: &str, data: &[u8]) {
 /// 创建 Admin UI 路由
 ///
 /// # 访问路径
-/// - `/auth-admin/ui/` - 主页面
-/// - `/auth-admin/ui/assets/*` - 静态资源
-/// - `/auth-admin/ui/*` - SPA 子路由（fallback 到 index.html）
+/// - `/ui/` - 主页面
+/// - `/ui/assets/*` - 静态资源
+/// - `/ui/*` - SPA 子路由（fallback 到 index.html）
 pub fn auth_admin_ui_router() -> Router {
-    Router::with_path("auth-admin/ui")
+    Router::with_path("ui")
         .get(serve_admin_ui_entry)
         .push(Router::with_path("{**path}").get(serve_admin_ui))
 }
 
-/// 处理 /auth-admin/ui 和 /auth-admin/ui/ 的入口
+/// 处理 /ui 和 /ui/ 的入口
+/// 注意：不在此处做 302 重定向，避免 nginx 反代场景下丢失 servlet 前缀。
+/// 由 nginx 或前端自行处理 trailing slash 规范化。
 #[handler]
-async fn serve_admin_ui_entry(req: &mut Request, res: &mut Response) {
-    let path = req.uri().path().to_string();
-    if !path.ends_with('/') {
-        res.render(Redirect::other(format!("{}/", path)));
-    } else if let Some(index) = AdminUiAssets::get("index.html") {
+async fn serve_admin_ui_entry(_req: &mut Request, res: &mut Response) {
+    if let Some(index) = AdminUiAssets::get("index.html") {
         serve_embedded_file(res, "index.html", &index.data);
     } else {
         res.status_code(StatusCode::NOT_FOUND);

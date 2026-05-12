@@ -49,7 +49,7 @@ use serde::{Deserialize, Serialize};
 #[id_field(id)]
 #[initialize_with_defaults]
 pub struct Order {
-    pub id: String,
+    pub id: String,        // 使用 genies::next_id() 生成（新项目优先雪花 ID）
     pub status: String,
     pub total: f64,
 }

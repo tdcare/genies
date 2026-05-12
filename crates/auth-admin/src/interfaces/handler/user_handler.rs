@@ -11,7 +11,7 @@ use crate::domain::entity::{AdminUser, AdminRole, AdminPermission, AdminDepartme
 
 /// 用户管理路由
 pub fn routes() -> Router {
-    Router::with_path("/auth-admin/users")
+    Router::with_path("/users")
         .get(list_users)
         .post(create_user)
         .push(
@@ -47,7 +47,7 @@ pub fn routes() -> Router {
         )
 }
 
-/// GET /auth-admin/users — 分页用户列表
+/// GET /users — 分页用户列表
 #[endpoint(tags("users"), summary = "分页用户列表")]
 pub async fn list_users(
     page: QueryParam<u64, false>,
@@ -66,7 +66,7 @@ pub async fn list_users(
     }
 }
 
-/// POST /auth-admin/users — 创建用户
+/// POST /users — 创建用户
 #[endpoint(tags("users"), summary = "创建用户")]
 pub async fn create_user(body: JsonBody<serde_json::Value>) -> Json<RespVO<serde_json::Value>> {
     let input = body.into_inner();
@@ -76,7 +76,7 @@ pub async fn create_user(body: JsonBody<serde_json::Value>) -> Json<RespVO<serde
     }
 }
 
-/// GET /auth-admin/users/{id} — 用户详情
+/// GET /users/{id} — 用户详情
 #[endpoint(tags("users"), summary = "获取用户详情")]
 pub async fn get_user(id: PathParam<i64>) -> Json<RespVO<AdminUser>> {
     match UserAppService::get_by_id(id.into_inner()).await {
@@ -85,7 +85,7 @@ pub async fn get_user(id: PathParam<i64>) -> Json<RespVO<AdminUser>> {
     }
 }
 
-/// PUT /auth-admin/users/{id} — 更新用户
+/// PUT /users/{id} — 更新用户
 #[endpoint(tags("users"), summary = "更新用户")]
 pub async fn update_user(id: PathParam<i64>, body: JsonBody<serde_json::Value>) -> Json<RespVO<()>> {
     match UserAppService::update(id.into_inner(), &body.into_inner()).await {
@@ -94,7 +94,7 @@ pub async fn update_user(id: PathParam<i64>, body: JsonBody<serde_json::Value>) 
     }
 }
 
-/// DELETE /auth-admin/users/{id} — 删除用户
+/// DELETE /users/{id} — 删除用户
 #[endpoint(tags("users"), summary = "删除用户")]
 pub async fn delete_user(id: PathParam<i64>) -> Json<RespVO<()>> {
     match UserAppService::delete(id.into_inner()).await {
@@ -103,7 +103,7 @@ pub async fn delete_user(id: PathParam<i64>) -> Json<RespVO<()>> {
     }
 }
 
-/// POST /auth-admin/users/batch-delete — 批量删除
+/// POST /users/batch-delete — 批量删除
 #[endpoint(tags("users"), summary = "批量删除用户")]
 pub async fn batch_delete_users(body: JsonBody<serde_json::Value>) -> Json<RespVO<()>> {
     let input = body.into_inner();
@@ -120,7 +120,7 @@ pub async fn batch_delete_users(body: JsonBody<serde_json::Value>) -> Json<RespV
     }
 }
 
-/// PUT /auth-admin/users/{id}/status — 启用/禁用
+/// PUT /users/{id}/status — 启用/禁用
 #[endpoint(tags("users"), summary = "更新用户状态")]
 pub async fn update_status(id: PathParam<i64>, body: JsonBody<serde_json::Value>) -> Json<RespVO<()>> {
     let input = body.into_inner();
@@ -131,7 +131,7 @@ pub async fn update_status(id: PathParam<i64>, body: JsonBody<serde_json::Value>
     }
 }
 
-/// PUT /auth-admin/users/{id}/reset-password — 重置密码
+/// PUT /users/{id}/reset-password — 重置密码
 #[endpoint(tags("users"), summary = "重置用户密码")]
 pub async fn reset_password(id: PathParam<i64>, body: JsonBody<serde_json::Value>) -> Json<RespVO<()>> {
     let input = body.into_inner();
@@ -142,7 +142,7 @@ pub async fn reset_password(id: PathParam<i64>, body: JsonBody<serde_json::Value
     }
 }
 
-/// GET /auth-admin/users/{id}/roles — 获取用户角色
+/// GET /users/{id}/roles — 获取用户角色
 #[endpoint(tags("users"), summary = "获取用户角色列表")]
 pub async fn get_user_roles(id: PathParam<i64>) -> Json<RespVO<Vec<AdminRole>>> {
     match UserAppService::get_user_roles(id.into_inner()).await {
@@ -151,7 +151,7 @@ pub async fn get_user_roles(id: PathParam<i64>) -> Json<RespVO<Vec<AdminRole>>> 
     }
 }
 
-/// POST /auth-admin/users/{id}/roles — 分配角色
+/// POST /users/{id}/roles — 分配角色
 #[endpoint(tags("users"), summary = "分配用户角色")]
 pub async fn assign_user_role(id: PathParam<i64>, body: JsonBody<serde_json::Value>) -> Json<RespVO<()>> {
     let input = body.into_inner();
@@ -168,7 +168,7 @@ pub async fn assign_user_role(id: PathParam<i64>, body: JsonBody<serde_json::Val
     }
 }
 
-/// DELETE /auth-admin/users/{id}/roles/{role_id} — 移除角色
+/// DELETE /users/{id}/roles/{role_id} — 移除角色
 #[endpoint(tags("users"), summary = "移除用户角色")]
 pub async fn revoke_user_role(id: PathParam<i64>, role_id: PathParam<i64>) -> Json<RespVO<()>> {
     match UserAppService::revoke_role(id.into_inner(), role_id.into_inner()).await {
@@ -177,7 +177,7 @@ pub async fn revoke_user_role(id: PathParam<i64>, role_id: PathParam<i64>) -> Js
     }
 }
 
-/// GET /auth-admin/users/{id}/permissions — 用户有效权限（合并所有角色）
+/// GET /users/{id}/permissions — 用户有效权限（合并所有角色）
 #[endpoint(tags("users"), summary = "获取用户有效权限")]
 pub async fn get_user_permissions(id: PathParam<i64>) -> Json<RespVO<Vec<AdminPermission>>> {
     match UserAppService::get_user_permissions(id.into_inner()).await {
@@ -186,7 +186,7 @@ pub async fn get_user_permissions(id: PathParam<i64>) -> Json<RespVO<Vec<AdminPe
     }
 }
 
-/// GET /auth-admin/users/{id}/departments — 获取用户部门列表
+/// GET /users/{id}/departments — 获取用户部门列表
 #[endpoint(tags("users"), summary = "获取用户部门列表")]
 pub async fn get_user_departments(id: PathParam<i64>) -> Json<RespVO<Vec<AdminDepartment>>> {
     match UserDepartmentAppService::get_user_departments(id.into_inner()).await {
@@ -195,7 +195,7 @@ pub async fn get_user_departments(id: PathParam<i64>) -> Json<RespVO<Vec<AdminDe
     }
 }
 
-/// POST /auth-admin/users/{id}/departments — 分配用户部门
+/// POST /users/{id}/departments — 分配用户部门
 #[endpoint(tags("users"), summary = "分配用户部门")]
 pub async fn assign_user_departments(id: PathParam<i64>, body: JsonBody<Vec<i64>>) -> Json<RespVO<()>> {
     match UserDepartmentAppService::assign_departments(id.into_inner(), body.into_inner()).await {

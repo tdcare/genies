@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { User, UserFilled, Key, Lock, OfficeBuilding, SwitchButton, Grid } from '@element-plus/icons-vue'
-import { logout, changePassword } from '../api'
+import { changePassword } from '../api'
+import { getApiBaseUrl } from '../utils/path'
+import axios from 'axios'
+
+// 独立的 axios 实例用于 logout，不经过拦截器避免 token 刷新死锁
+const logoutApi = axios.create({ baseURL: getApiBaseUrl(), timeout: 5000 })
 
 const route = useRoute()
 const router = useRouter()
@@ -23,7 +28,17 @@ function handleMenuSelect(index: string) {
 }
 
 async function handleLogout() {
-  await logout()
+  // 先清除 token，确保即使 API 失败也能退出
+  localStorage.removeItem('admin_token')
+  localStorage.removeItem('admin_token_expires_at')
+  localStorage.removeItem('admin_user')
+
+  try {
+    await logoutApi.post('/logout')
+  } catch {
+    // ignore
+  }
+
   ElMessage.success('已退出登录')
   router.push('/login')
 }

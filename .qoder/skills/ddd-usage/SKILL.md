@@ -206,6 +206,29 @@ CREATE TABLE message (
 - **genies_derive**: 提供 `#[derive(Aggregate)]` 和 `#[derive(DomainEvent)]` 宏
 - **genies_context**: 提供 `CONTEXT.rbatis` 数据库连接
 
+## ID 生成规则
+
+> **新项目统一使用雪花 ID 作为聚合根/实体 ID。** 雪花 ID 是 Java `UUID.randomUUID()` 的功能平替，用于生成分布式唯一 ID。从 Java 迁移时，若已有数据使用 UUID 且雪花 ID 无法兼容，可继续使用 UUID 保持数据兼容性。
+
+在聚合根工厂方法中生成 ID：
+
+```rust
+impl Device {
+    pub fn create(name: String) -> (Self, DeviceCreatedEvent) {
+        let id = genies::next_id();  // 使用雪花 ID，禁止使用 uuid::Uuid::new_v4()
+        let device = Self { id: id.clone(), name: name.clone(), status: "new".into() };
+        let event = DeviceCreatedEvent { id, name, created_at: chrono::Utc::now().timestamp_millis() };
+        (device, event)
+    }
+}
+```
+
+在核心库中（无法使用 `genies` crate 时）：
+
+```rust
+let id = genies_core::id_gen::next_id();
+```
+
 ## Key Files
 
 - [crates/ddd/src/lib.rs](file:///d:/tdcare/genies/crates/ddd/src/lib.rs) - 模块入口

@@ -383,6 +383,21 @@ RBatis::sync(
 
 For Genies project-specific patterns, see [genies-patterns.md](genies-patterns.md).
 
+## ID 生成规则
+
+> **新项目统一使用雪花 ID（`genies::next_id()`）作为实体 ID。** 雪花 ID 是 Java `UUID.randomUUID()` 的功能平替，用于生成分布式唯一 ID。从 Java 迁移时，若已有数据使用 UUID 且雪花 ID 无法兼容，可继续使用 UUID 保持数据兼容性。
+
+创建实体时生成 ID 的正确方式：
+
+```rust
+let activity = Activity {
+    id: Some(genies::next_id()),  // 使用雪花 ID
+    name: Some("Test".into()),
+    ..Default::default()
+};
+Activity::insert(&rb, &activity).await?;
+```
+
 ## Supported Databases
 
 | Database | Driver Crate | URL Format |

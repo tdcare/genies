@@ -101,7 +101,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
-uuid = { version = "1", features = ["v4"] }      # 可移除，已由 genies::next_id() 替代
+uuid = { version = "1", features = ["v4"] }      # 新功能已由 genies::next_id() 替代；迁移项目若已有 UUID 数据且无法兼容雪花 ID，可保留
 log = "0.4"
 anyhow = "1.0"
 ```
@@ -613,7 +613,9 @@ pub async fn run_migrations() {
 
 #### 6.1.3 ID 生成：UUID → Snowflake
 
-Java 项目中常用 `UUID.randomUUID().toString()` 生成主键 ID，迁移到 Rust 后统一使用 Genies 内置的雪花 ID 生成器替代。
+> **规则：新项目统一使用雪花 ID（`genies::next_id()`）作为实体/聚合根 ID。** 从 Java 迁移时，若已有数据使用 UUID 且雪花 ID 无法兼容，可继续使用 UUID 保持数据兼容性。新功能开发不应引入 `uuid` crate。
+
+Java 项目中常用 `UUID.randomUUID().toString()` 生成主键 ID，迁移到 Rust 后推荐使用 Genies 内置的雪花 ID 生成器替代。
 
 **Java 原代码：**
 

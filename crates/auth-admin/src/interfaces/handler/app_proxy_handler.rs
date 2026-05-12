@@ -11,36 +11,25 @@ use salvo::writing::Text;
 use crate::application::app_service::ApplicationAppService;
 use crate::application::service::SyncAppService;
 
-/// 应用权限代理路由
-pub fn routes() -> Router {
-    Router::with_path("/auth-admin/apps/{id}")
-        .push(Router::with_path("schemas").get(proxy_list_schemas))
-        .push(
-            Router::with_path("policies")
-                .get(proxy_list_policies)
-                .post(proxy_add_policy)
-        )
-        .push(
-            Router::with_path("policies/{policy_id}").delete(proxy_remove_policy)
-        )
-        .push(
-            Router::with_path("roles")
-                .get(proxy_list_roles)
-                .post(proxy_add_role)
-        )
-        .push(
-            Router::with_path("roles/{role_id}").delete(proxy_remove_role)
-        )
-        .push(
-            Router::with_path("groups")
-                .get(proxy_list_groups)
-                .post(proxy_add_group)
-        )
-        .push(
-            Router::with_path("groups/{group_id}").delete(proxy_remove_group)
-        )
-        .push(Router::with_path("reload").post(proxy_reload))
-        .push(Router::with_path("sync-user-roles").post(proxy_sync_user_roles))
+/// 返回代理子路由列表，需由调用方挂载到 `{id}` 节点下
+pub fn proxy_sub_routes() -> Vec<Router> {
+    vec![
+        Router::with_path("schemas").get(proxy_list_schemas),
+        Router::with_path("policies")
+            .get(proxy_list_policies)
+            .post(proxy_add_policy),
+        Router::with_path("policies/{policy_id}").delete(proxy_remove_policy),
+        Router::with_path("roles")
+            .get(proxy_list_roles)
+            .post(proxy_add_role),
+        Router::with_path("roles/{role_id}").delete(proxy_remove_role),
+        Router::with_path("groups")
+            .get(proxy_list_groups)
+            .post(proxy_add_group),
+        Router::with_path("groups/{group_id}").delete(proxy_remove_group),
+        Router::with_path("reload").post(proxy_reload),
+        Router::with_path("sync-user-roles").post(proxy_sync_user_roles),
+    ]
 }
 
 /// 内部辅助：根据 app_id 获取 base_url
@@ -83,7 +72,7 @@ fn write_error(res: &mut Response, msg: &str) {
     res.render(Text::Json(err.to_string()));
 }
 
-/// GET /auth-admin/apps/{id}/schemas — 代理查询 API Schema
+/// GET /apps/{id}/schemas — 代理查询 API Schema
 #[endpoint(tags("app-proxy"), summary = "代理查询应用 Schema")]
 pub async fn proxy_list_schemas(
     id: PathParam<i64>,
@@ -113,7 +102,7 @@ pub async fn proxy_list_schemas(
     }
 }
 
-/// GET /auth-admin/apps/{id}/policies — 代理查询策略
+/// GET /apps/{id}/policies — 代理查询策略
 #[endpoint(tags("app-proxy"), summary = "代理查询应用策略")]
 pub async fn proxy_list_policies(
     id: PathParam<i64>,
@@ -143,7 +132,7 @@ pub async fn proxy_list_policies(
     }
 }
 
-/// POST /auth-admin/apps/{id}/policies — 代理添加策略
+/// POST /apps/{id}/policies — 代理添加策略
 #[endpoint(tags("app-proxy"), summary = "代理添加应用策略")]
 pub async fn proxy_add_policy(
     id: PathParam<i64>,
@@ -169,7 +158,7 @@ pub async fn proxy_add_policy(
     }
 }
 
-/// DELETE /auth-admin/apps/{id}/policies/{policy_id} — 代理删除策略
+/// DELETE /apps/{id}/policies/{policy_id} — 代理删除策略
 #[endpoint(tags("app-proxy"), summary = "代理删除应用策略")]
 pub async fn proxy_remove_policy(
     id: PathParam<i64>,
@@ -195,7 +184,7 @@ pub async fn proxy_remove_policy(
     }
 }
 
-/// GET /auth-admin/apps/{id}/roles — 代理查询角色
+/// GET /apps/{id}/roles — 代理查询角色
 #[endpoint(tags("app-proxy"), summary = "代理查询应用角色分配")]
 pub async fn proxy_list_roles(
     id: PathParam<i64>,
@@ -225,7 +214,7 @@ pub async fn proxy_list_roles(
     }
 }
 
-/// POST /auth-admin/apps/{id}/roles — 代理添加角色
+/// POST /apps/{id}/roles — 代理添加角色
 #[endpoint(tags("app-proxy"), summary = "代理添加应用角色分配")]
 pub async fn proxy_add_role(
     id: PathParam<i64>,
@@ -251,7 +240,7 @@ pub async fn proxy_add_role(
     }
 }
 
-/// GET /auth-admin/apps/{id}/groups — 代理查询分组
+/// GET /apps/{id}/groups — 代理查询分组
 #[endpoint(tags("app-proxy"), summary = "代理查询应用对象分组")]
 pub async fn proxy_list_groups(
     id: PathParam<i64>,
@@ -281,7 +270,7 @@ pub async fn proxy_list_groups(
     }
 }
 
-/// POST /auth-admin/apps/{id}/groups — 代理添加分组
+/// POST /apps/{id}/groups — 代理添加分组
 #[endpoint(tags("app-proxy"), summary = "代理添加应用对象分组")]
 pub async fn proxy_add_group(
     id: PathParam<i64>,
@@ -307,7 +296,7 @@ pub async fn proxy_add_group(
     }
 }
 
-/// DELETE /auth-admin/apps/{id}/roles/{role_id} — 代理删除角色
+/// DELETE /apps/{id}/roles/{role_id} — 代理删除角色
 #[endpoint(tags("app-proxy"), summary = "代理删除应用角色分配")]
 pub async fn proxy_remove_role(
     id: PathParam<i64>,
@@ -333,7 +322,7 @@ pub async fn proxy_remove_role(
     }
 }
 
-/// DELETE /auth-admin/apps/{id}/groups/{group_id} — 代理删除分组
+/// DELETE /apps/{id}/groups/{group_id} — 代理删除分组
 #[endpoint(tags("app-proxy"), summary = "代理删除应用对象分组")]
 pub async fn proxy_remove_group(
     id: PathParam<i64>,
@@ -359,7 +348,7 @@ pub async fn proxy_remove_group(
     }
 }
 
-/// POST /auth-admin/apps/{id}/sync-user-roles — 将用户-角色映射推送到目标微服务
+/// POST /apps/{id}/sync-user-roles — 将用户-角色映射推送到目标微服务
 #[endpoint(tags("app-proxy"), summary = "推送用户-角色映射到目标应用")]
 pub async fn proxy_sync_user_roles(
     id: PathParam<i64>,
@@ -390,7 +379,7 @@ pub async fn proxy_sync_user_roles(
     }
 }
 
-/// POST /auth-admin/apps/{id}/reload — 代理重载 Enforcer
+/// POST /apps/{id}/reload — 代理重载 Enforcer
 #[endpoint(tags("app-proxy"), summary = "代理重载应用 Enforcer")]
 pub async fn proxy_reload(
     id: PathParam<i64>,

@@ -10,7 +10,7 @@ use crate::domain::entity::AdminPermission;
 
 /// 权限管理路由
 pub fn routes() -> Router {
-    Router::with_path("/auth-admin/permissions")
+    Router::with_path("/permissions")
         .get(list_permissions)
         .post(create_permission)
         .push(
@@ -21,7 +21,7 @@ pub fn routes() -> Router {
         )
 }
 
-/// GET /auth-admin/permissions — 权限列表
+/// GET /permissions — 权限列表
 #[endpoint(tags("permissions"), summary = "获取权限列表")]
 pub async fn list_permissions() -> Json<RespVO<Vec<AdminPermission>>> {
     match PermissionAppService::list_all().await {
@@ -30,7 +30,7 @@ pub async fn list_permissions() -> Json<RespVO<Vec<AdminPermission>>> {
     }
 }
 
-/// POST /auth-admin/permissions — 创建权限
+/// POST /permissions — 创建权限
 #[endpoint(tags("permissions"), summary = "创建权限")]
 pub async fn create_permission(body: JsonBody<serde_json::Value>) -> Json<RespVO<()>> {
     let input = body.into_inner();
@@ -40,7 +40,7 @@ pub async fn create_permission(body: JsonBody<serde_json::Value>) -> Json<RespVO
     }
 }
 
-/// GET /auth-admin/permissions/{id} — 权限详情
+/// GET /permissions/{id} — 权限详情
 #[endpoint(tags("permissions"), summary = "获取权限详情")]
 pub async fn get_permission(id: PathParam<i64>) -> Json<RespVO<AdminPermission>> {
     match PermissionAppService::get_by_id(id.into_inner()).await {
@@ -49,7 +49,7 @@ pub async fn get_permission(id: PathParam<i64>) -> Json<RespVO<AdminPermission>>
     }
 }
 
-/// PUT /auth-admin/permissions/{id} — 更新权限
+/// PUT /permissions/{id} — 更新权限
 #[endpoint(tags("permissions"), summary = "更新权限")]
 pub async fn update_permission(id: PathParam<i64>, body: JsonBody<serde_json::Value>) -> Json<RespVO<()>> {
     match PermissionAppService::update(id.into_inner(), &body.into_inner()).await {
@@ -58,7 +58,7 @@ pub async fn update_permission(id: PathParam<i64>, body: JsonBody<serde_json::Va
     }
 }
 
-/// DELETE /auth-admin/permissions/{id} — 删除权限
+/// DELETE /permissions/{id} — 删除权限
 #[endpoint(tags("permissions"), summary = "删除权限")]
 pub async fn delete_permission(id: PathParam<i64>) -> Json<RespVO<()>> {
     match PermissionAppService::delete(id.into_inner()).await {

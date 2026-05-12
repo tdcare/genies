@@ -12,7 +12,7 @@
 //! - [`casbin_auth`] - API Casbin 权限中间件
 //! - [`local_auth`] - JWT 认证中间件
 //! - [`combined_auth`] - 组合认证+授权中间件（JWT + Casbin）
-//! - [`auth_admin_router`] - Casbin 策略 Admin API 路由
+//! - [`auth_router`] - Casbin 策略 Admin API 路由
 //! - [`extract_and_sync_schemas`] - Schema 同步函数
 //!
 //! # 快速开始
@@ -88,7 +88,7 @@ pub use middleware::casbin_auth;
 pub use middleware::casbin_filter_object;
 
 // Admin API
-pub use admin_api::auth_admin_router;
+pub use admin_api::auth_router;
 pub use admin_api::auth_public_router;
 
 // Schema 同步
