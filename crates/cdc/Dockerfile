@@ -5,16 +5,12 @@ FROM rust:1.90-bookworm AS builder
 
 WORKDIR /usr/src/cdc
 
-# Configure China mirror for crates.io
+# Configure China mirror for crates.io (rsproxy sparse)
 RUN mkdir -p /usr/local/cargo/ && \
     echo '[source.crates-io]' > /usr/local/cargo/config.toml && \
     echo 'replace-with = "rsproxy-sparse"' >> /usr/local/cargo/config.toml && \
     echo '[source.rsproxy-sparse]' >> /usr/local/cargo/config.toml && \
-    echo 'registry = "sparse+https://rsproxy.cn/crates.io-index/"' >> /usr/local/cargo/config.toml && \
-    echo '[registries.rsproxy]' >> /usr/local/cargo/config.toml && \
-    echo 'index = "https://rsproxy.cn/crates.io-index"' >> /usr/local/cargo/config.toml && \
-    echo '[net]' >> /usr/local/cargo/config.toml && \
-    echo 'git-fetch-with-cli = true' >> /usr/local/cargo/config.toml
+    echo 'registry = "sparse+https://rsproxy.cn/crates.io-index/"' >> /usr/local/cargo/config.toml
 
 # 1. Copy manifest only (for dependency caching layer)
 COPY Cargo.toml ./
