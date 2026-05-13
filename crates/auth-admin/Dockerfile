@@ -5,12 +5,16 @@ FROM rust:1.90-bookworm AS builder
 
 WORKDIR /usr/src/genies
 
-# Configure China mirror for crates.io and apt
+# Configure China mirror for crates.io
 RUN mkdir -p /usr/local/cargo/ && \
     echo '[source.crates-io]' > /usr/local/cargo/config.toml && \
-    echo 'replace-with = "ustc"' >> /usr/local/cargo/config.toml && \
-    echo '[source.ustc]' >> /usr/local/cargo/config.toml && \
-    echo 'registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' >> /usr/local/cargo/config.toml
+    echo 'replace-with = "rsproxy-sparse"' >> /usr/local/cargo/config.toml && \
+    echo '[source.rsproxy-sparse]' >> /usr/local/cargo/config.toml && \
+    echo 'registry = "sparse+https://rsproxy.cn/crates.io-index/"' >> /usr/local/cargo/config.toml && \
+    echo '[registries.rsproxy]' >> /usr/local/cargo/config.toml && \
+    echo 'index = "https://rsproxy.cn/crates.io-index"' >> /usr/local/cargo/config.toml && \
+    echo '[net]' >> /usr/local/cargo/config.toml && \
+    echo 'git-fetch-with-cli = true' >> /usr/local/cargo/config.toml
 
 # 1. Copy manifests only (for dependency caching layer)
 COPY Cargo.toml ./
@@ -56,8 +60,8 @@ RUN find crates -name "*.rs" -exec touch {} + \
 # ============================================================
 FROM debian:bookworm-slim
 
-# Use China apt mirror
-RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources
+# Use China apt mirror (rsproxy does not provide apt, use aliyun)
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
