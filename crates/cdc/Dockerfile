@@ -5,6 +5,13 @@ FROM rust:1.90-bookworm AS builder
 
 WORKDIR /usr/src/cdc
 
+# Configure China mirror for crates.io
+RUN mkdir -p /usr/local/cargo/ && \
+    echo '[source.crates-io]' > /usr/local/cargo/config.toml && \
+    echo 'replace-with = "ustc"' >> /usr/local/cargo/config.toml && \
+    echo '[source.ustc]' >> /usr/local/cargo/config.toml && \
+    echo 'registry = "sparse+https://mirrors.ustc.edu.cn/crates.io-index/"' >> /usr/local/cargo/config.toml
+
 # 1. Copy manifest only (for dependency caching layer)
 COPY Cargo.toml ./
 
@@ -25,6 +32,9 @@ RUN find src -name "*.rs" -exec touch {} + \
 # Stage 2: Runtime
 # ============================================================
 FROM debian:bookworm-slim
+
+# Use China apt mirror
+RUN sed -i 's|deb.debian.org|mirrors.ustc.edu.cn|g' /etc/apt/sources.list.d/debian.sources
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
