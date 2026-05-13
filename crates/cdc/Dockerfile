@@ -1,33 +1,48 @@
-FROM rust:1.81  as builder
-# Use prebuilt builder image
-# FROM rust:1.50-prebuilt as builder
+# ============================================================
+# Stage 1: Builder
+# ============================================================
+FROM rust:1.90-bookworm AS builder
 
-RUN rustup component add rustfmt
-
-# New cargo project and copy Rust dependencies (and store as a separate Docker layer)
-# NOTE: must call `cargo vendor` first and add `vendor` folder to git
-RUN USER=root 
-RUN cargo new cdc
 WORKDIR /usr/src/cdc
-RUN mkdir -p .cargo
-COPY ./.cargo/config.toml .cargo/config.toml
-# COPY vendor vendor
-COPY Cargo.toml  ./
-# COPY build.rs ./
 
-COPY ./src src
+# 1. Copy manifest only (for dependency caching layer)
+COPY Cargo.toml ./
 
+# 2. Create dummy main.rs so cargo can resolve & fetch deps
+RUN mkdir -p src && echo "fn main() {}" > src/main.rs
 
-RUN cargo build --release 
+# 3. Fetch and compile dependencies (this layer is cached if Cargo.toml unchanged)
+RUN cargo build --release 2>/dev/null || true
 
-# Copy the app to an base Docker image, here we use distroless
+# 4. Copy real source code
+COPY src src
 
-FROM openeuler/openeuler:22.03-lts
-RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+# 5. Touch source files to invalidate previous build artifacts, then build for real
+RUN find src -name "*.rs" -exec touch {} + \
+    && cargo build --release
 
+# ============================================================
+# Stage 2: Runtime
+# ============================================================
+FROM debian:bookworm-slim
 
-COPY --from=builder /usr/src/cdc/target/release/cdc /
-COPY application.yml /
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set timezone to Asia/Shanghai
+RUN cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo "Asia/Shanghai" > /etc/timezone
+
+WORKDIR /app
+
+# Copy the compiled binary from builder
+COPY --from=builder /usr/src/cdc/target/release/cdc ./cdc
+
+# Copy runtime configuration
+COPY application.yml ./application.yml
+
 EXPOSE 8010
 
-CMD ["/cdc"]
+ENTRYPOINT ["./cdc"]
