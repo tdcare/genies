@@ -11,7 +11,7 @@ RUN mkdir -p /usr/local/cargo/ && \
     echo '[source.crates-io]' > /usr/local/cargo/config.toml && \
     echo 'replace-with = "rsproxy-sparse"' >> /usr/local/cargo/config.toml && \
     echo '[source.rsproxy-sparse]' >> /usr/local/cargo/config.toml && \
-    echo 'registry = "sparse+https://rsproxy.cn/crates.io-index/"' >> /usr/local/cargo/config.toml
+    echo 'registry = "sparse+https://rsproxy.cn/index/"' >> /usr/local/cargo/config.toml
 
 # 1. Copy manifest only (for dependency caching layer)
 COPY Cargo.toml ./
