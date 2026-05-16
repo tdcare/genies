@@ -28,7 +28,12 @@ impl AppInstanceDomainService {
                 .await
                 .map_err(|e| e.to_string())?;
             if existing_app.is_none() {
-                ApplicationEntity::insert_app(&tx, app_name, app_name, "", "", &1)
+                let app_base_url = entity.base_url.as_deref().unwrap_or_default();
+                if app_base_url.is_empty() {
+                    tx.rollback().await.map_err(|e| e.to_string())?;
+                    return Err("无法自动创建应用：base_url 不能为空".to_string());
+                }
+                ApplicationEntity::insert_app(&tx, app_name, app_name, "", app_base_url, &1)
                     .await
                     .map_err(|e| e.to_string())?;
             }

@@ -130,7 +130,15 @@ pub async fn register_instance(
     let body = RegisterRequest {
         app_name: config.server_name.clone(),
         instance_id,
-        base_url: format!("http://{}", config.server_url),
+        base_url: {
+            let base = match config.gateway.as_deref() {
+                Some(gw) if !gw.is_empty() => gw.trim_end_matches('/').to_string(),
+                _ => format!("http://{}", config.server_url),
+            };
+            let path = config.servlet_path.as_str();
+            let path = if path.starts_with('/') { path.to_string() } else { format!("/{}", path) };
+            format!("{}{}", base, path)
+        },
         display_name: config.server_name.clone(),
         version: env!("CARGO_PKG_VERSION").to_string(),
     };
@@ -332,10 +340,9 @@ pub async fn try_register_and_heartbeat(config: &ApplicationConfig) -> Option<Se
     match register_instance(&auth_admin_url, &jwt_secret, instance_id, config).await {
         Ok(()) => {
             log::info!(
-                "服务实例注册成功: app_name={}, instance_id={}, base_url=http://{}",
+                "服务实例注册成功: app_name={}, instance_id={}",
                 config.server_name,
                 instance_id,
-                config.server_url,
             );
         }
         Err(e) => {

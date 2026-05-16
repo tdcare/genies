@@ -138,7 +138,7 @@ fn resolve_worker_id(config: &ApplicationConfig, cache: &CacheService) -> i32 {
 
 /// 根据数据库 URL scheme 创建对应的驱动实例
 fn create_db_driver(url: &str) -> Box<dyn rbdc::db::Driver> {
-    let scheme = url.split("://").next().unwrap_or("");
+    let scheme = url.trim().split("://").next().unwrap_or("");
     match scheme {
         #[cfg(feature = "mysql")]
         "mysql" => Box::new(rbdc_mysql::driver::MysqlDriver {}),
@@ -165,9 +165,10 @@ impl ApplicationContext {
     /// 初始化数据库连接池，根据 database_url 自动选择驱动
     pub async fn init_database(&self) {
         self.db_init_once.call_once(|| {
-            let driver = create_db_driver(&self.config.database_url);
-            log::info!("rbatis database init ({})...", self.config.database_url);
-            let _ = self.rbatis.init(driver, &self.config.database_url).unwrap();
+            let db_url = self.config.database_url.trim();
+            let driver = create_db_driver(db_url);
+            log::info!("rbatis database init ({})...", db_url);
+            let _ = self.rbatis.init(driver, db_url).unwrap();
             
             let _ = self.rbatis.get_pool().unwrap().set_max_open_conns(self.config.max_connections as u64);
             let _ = self.rbatis.get_pool().unwrap().set_max_idle_conns(self.config.wait_timeout as u64);
