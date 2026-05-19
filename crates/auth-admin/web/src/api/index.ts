@@ -76,6 +76,41 @@ export interface LoginResponse {
   expires_in: number
   username: string
   display_name: string
+  require_2fa: boolean
+  preauth_token?: string
+  available_methods: string[]
+  require_2fa_setup?: boolean
+  two_fa_setup_deadline?: number
+}
+
+export interface CaptchaData {
+  captcha_id: string
+  image_base64: string
+}
+
+export interface TwoFactorSettings {
+  enabled: boolean
+  methods: string[]
+  grace_days?: number
+  enabled_at?: string
+}
+
+export interface CaptchaSettings {
+  enabled: boolean
+}
+
+export interface PasswordPolicySettings {
+  min_length: number
+  require_uppercase: boolean
+  require_lowercase: boolean
+  require_digit: boolean
+  require_special: boolean
+}
+
+export interface SystemSettings {
+  two_fa: TwoFactorSettings
+  captcha: CaptchaSettings
+  password: PasswordPolicySettings
 }
 
 // ============================================================================
@@ -172,13 +207,55 @@ api.interceptors.response.use(
 // Auth API
 // ============================================================================
 
-export async function login(username: string, password: string): Promise<LoginResponse> {
-  const response = await api.post<ApiResponse<LoginResponse>>('/login', { username, password })
+export async function login(username: string, password: string, captchaId?: string, captchaText?: string): Promise<LoginResponse> {
+  const body: any = { username, password }
+  if (captchaId) { body.captcha_id = captchaId; body.captcha_text = captchaText }
+  const response = await api.post<ApiResponse<LoginResponse>>('/login', body)
+  const data = response.data.data
+  // 仅当不需要 2FA 时才存储 token
+  if (!data.require_2fa) {
+    localStorage.setItem('admin_token', data.access_token)
+    localStorage.setItem('admin_token_expires_at', String(Date.now() + data.expires_in * 1000))
+    localStorage.setItem('admin_user', JSON.stringify({ username: data.username, display_name: data.display_name }))
+    // 存储 2FA 强制设置状态
+    if (data.require_2fa_setup) {
+      localStorage.setItem('require_2fa_setup', 'true')
+      if (data.two_fa_setup_deadline) {
+        localStorage.setItem('two_fa_setup_deadline', String(data.two_fa_setup_deadline))
+      }
+    } else if (data.two_fa_setup_deadline) {
+      // 宽限期内：仅存deadline用于提示，不做强制
+      localStorage.removeItem('require_2fa_setup')
+      localStorage.setItem('two_fa_setup_deadline', String(data.two_fa_setup_deadline))
+    } else {
+      localStorage.removeItem('require_2fa_setup')
+      localStorage.removeItem('two_fa_setup_deadline')
+    }
+  }
+  return data
+}
+
+/// 2FA 二次验证
+export async function verify2FA(preauthToken: string, code: string, method: string): Promise<LoginResponse> {
+  const response = await api.post<ApiResponse<LoginResponse>>('/2fa/verify', {
+    preauth_token: preauthToken,
+    code,
+    method
+  })
   const data = response.data.data
   localStorage.setItem('admin_token', data.access_token)
   localStorage.setItem('admin_token_expires_at', String(Date.now() + data.expires_in * 1000))
   localStorage.setItem('admin_user', JSON.stringify({ username: data.username, display_name: data.display_name }))
+  // 2FA 验证通过说明用户已配置 2FA，清除强制设置标记
+  localStorage.removeItem('require_2fa_setup')
+  localStorage.removeItem('two_fa_setup_deadline')
   return data
+}
+
+/// 获取验证码
+export async function getCaptcha(): Promise<CaptchaData> {
+  const response = await api.get<ApiResponse<CaptchaData>>('/captcha')
+  return response.data.data
 }
 
 export async function logout(): Promise<void> {
@@ -195,6 +272,62 @@ export async function getMe(): Promise<any> {
 
 export async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
   await api.put('/me/password', { old_password: oldPassword, new_password: newPassword })
+}
+
+// ============================================================================
+// 2FA API
+// ============================================================================
+
+export async function get2FAStatus(): Promise<{ enabled: boolean; method: string; phone: string }> {
+  const response = await api.get<ApiResponse<{ enabled: boolean; method: string; phone: string }>>('/me/2fa')
+  return response.data.data
+}
+
+export async function setupTOTP(): Promise<{ secret: string; otpauth_url: string; qr_svg: string }> {
+  const response = await api.post<ApiResponse<{ secret: string; otpauth_url: string; qr_svg: string }>>('/me/2fa/totp/setup')
+  return response.data.data
+}
+
+export async function confirmTOTP(code: string): Promise<{ backup_codes: string[] }> {
+  const response = await api.post<ApiResponse<{ backup_codes: string[] }>>('/me/2fa/totp/confirm', { code })
+  return response.data.data
+}
+
+export async function setupSecondPassword(password: string): Promise<void> {
+  await api.post('/me/2fa/second-password', { password })
+}
+
+export async function disable2FA(): Promise<void> {
+  await api.delete('/me/2fa')
+}
+
+export async function setupSMS(phone: string): Promise<void> {
+  await api.post('/me/2fa/sms/setup', { phone })
+}
+
+export async function verifySMS(code: string): Promise<void> {
+  await api.post('/me/2fa/sms/verify', { code })
+}
+
+// ============================================================================
+// Settings API
+// ============================================================================
+
+export async function getSettings(): Promise<SystemSettings> {
+  const response = await api.get<ApiResponse<SystemSettings>>('/settings')
+  return response.data.data
+}
+
+export async function updatePasswordPolicy(settings: PasswordPolicySettings): Promise<void> {
+  await api.put('/settings/auth/password', settings)
+}
+
+export async function updateCaptchaSettings(settings: CaptchaSettings): Promise<void> {
+  await api.put('/settings/auth/captcha', settings)
+}
+
+export async function update2FASettings(settings: TwoFactorSettings): Promise<void> {
+  await api.put('/settings/auth/2fa', settings)
 }
 
 // ============================================================================

@@ -47,6 +47,12 @@ const routes: RouteRecordRaw[] = [
     path: '/profile',
     name: 'Profile',
     component: () => import('../views/Profile.vue')
+  },
+  {
+    path: '/settings',
+    name: 'Settings',
+    component: () => import('../views/Settings.vue'),
+    meta: { title: '系统设置', requireAuth: true }
   }
 ]
 
@@ -55,13 +61,18 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫：未登录跳转登录页
+// 路由守卫：未登录跳转登录页，强制 2FA 设置跳转个人信息页
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('admin_token')
+  const require2FaSetup = localStorage.getItem('require_2fa_setup')
+
   if (to.path !== '/login' && !token) {
     next('/login')
   } else if (to.path === '/login' && token) {
     next('/apps')
+  } else if (require2FaSetup === 'true' && to.path !== '/profile' && to.path !== '/login') {
+    // 需要强制设置 2FA，仅允许访问个人信息页
+    next('/profile')
   } else {
     next()
   }

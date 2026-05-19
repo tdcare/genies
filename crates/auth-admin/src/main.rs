@@ -35,7 +35,10 @@ async fn main() {
     genies_auth_admin::infrastructure::migration::run_migrations().await;
 
     // 4. 初始化认证配置和 Enforcer
-    let auth_config = Arc::new(LocalAuthConfig::new(CONTEXT.config.jwt_secret.clone()));
+    let auth_config = Arc::new(LocalAuthConfig::with_expiry(
+        CONTEXT.config.jwt_secret.clone(),
+        CONTEXT.config.jwt_expires_in_secs as usize,
+    ));
     let mgr = Arc::new(
         match EnforcerManager::new().await {
             Ok(m) => m,

@@ -81,6 +81,14 @@ pub struct ApplicationConfig {
     #[serde(default)]
     pub jwt_secret: String,
 
+    /// JWT 过期时间（秒），默认 7200 (2小时)
+    #[serde(default = "default_jwt_expires_in_secs")]
+    pub jwt_expires_in_secs: u64,
+
+    /// 2FA 加密密钥（32字节 hex，用于加密 TOTP 密钥等敏感数据，不配置则自动生成随机密钥）
+    #[serde(default)]
+    pub two_fa_encryption_key: String,
+
     /// auth-admin 服务地址（用于向 auth-admin 发起内部调用）
     #[serde(default)]
     pub auth_admin_url: String,
@@ -115,4 +123,8 @@ fn default_heartbeat_interval() -> u64 { 30 }
 
 fn default_auth_mode() -> String {
     "keycloak".to_string()
+}
+
+fn default_jwt_expires_in_secs() -> u64 {
+    7200
 }

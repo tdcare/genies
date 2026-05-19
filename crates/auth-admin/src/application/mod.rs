@@ -5,3 +5,5 @@
 pub mod dto;
 pub mod service;
 pub mod app_service;
+pub mod settings_service;
+pub mod two_factor_service;

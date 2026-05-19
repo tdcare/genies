@@ -5,3 +5,5 @@ pub mod department_repository;
 pub mod user_department_repository;
 pub mod application_repository;
 pub mod app_instance_repository;
+pub mod settings_repository;
+pub mod user_2fa_repository;

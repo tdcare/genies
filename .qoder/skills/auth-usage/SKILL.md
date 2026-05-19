@@ -290,6 +290,66 @@ let claims = verify_token("Bearer eyJ...", "my-jwt-secret")?;
 println!("User: {}", claims.sub);
 ```
 
+## Auth-Admin Login Response Format
+
+This section is for services that **call auth-admin's login API directly** (e.g., proxy services, API gateways, or services implementing custom login flows). JWT tokens verified by `local_auth`/`combined_auth` are always issued by auth-admin.
+
+### Login Response Fields
+
+The auth-admin login response (`POST /auth-admin/login`) now includes additional fields for captcha and 2FA support:
+
+```json
+{
+  "code": "0",
+  "data": {
+    "access_token": "eyJ...",
+    "token_type": "Bearer",
+    "expires_in": 7200,
+    "username": "admin",
+    "display_name": "Admin",
+    "require_2fa": false,
+    "preauth_token": null,
+    "available_methods": [],
+    "require_2fa_setup": false,
+    "two_fa_setup_deadline": null
+  }
+}
+```
+
+Key new fields:
+| Field | Type | Description |
+|-------|------|-------------|
+| `require_2fa` | bool | Whether the login needs 2FA verification. When `true`, `access_token` is empty and `preauth_token` is provided. |
+| `preauth_token` | Option\<String\> | Short-lived (5 min) JWT with `purpose="2fa_preauth"`. Used as input to `POST /auth-admin/2fa/verify`. |
+| `available_methods` | Vec\<String\> | Available 2FA methods (e.g., `["totp", "sms"]`) when `require_2fa=true`. |
+| `require_2fa_setup` | bool | System requires the user to set up 2FA (grace period has expired). |
+| `two_fa_setup_deadline` | Option\<usize\> | UNIX timestamp of the setup deadline. |
+
+### 2FA Preauth Token Flow
+
+If `require_2fa=true` in the login response:
+1. Extract the `preauth_token` and `available_methods`
+2. Present the 2FA method choices to the user
+3. Call `POST /auth-admin/2fa/verify` with `{ preauth_token, code, method }`
+4. On success, the response contains the full JWT `access_token`
+
+The preauth token has JWT claims: `uid`, `iat`, `exp` (5 min), `purpose="2fa_preauth"`. It cannot be used as a regular auth token.
+
+### Login Request with Captcha
+
+When captcha is enabled in auth-admin settings, the login request must include captcha fields:
+
+```json
+{
+  "username": "admin",
+  "password": "123456",
+  "captcha_id": "uuid-from-/captcha-endpoint",
+  "captcha_text": "abcd"
+}
+```
+
+Get the captcha via `GET /auth-admin/captcha` before calling login. The captcha_id and captcha_text fields are optional (omitted when captcha is disabled).
+
 ## Event-Driven Sync (Dapr)
 
 genies_auth subscribes to domain events published by auth-admin via Dapr pub/sub (`messagebus`). Events auto-update local `casbin_rules` table.

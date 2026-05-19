@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, UserFilled, Key, Lock, OfficeBuilding, SwitchButton, Grid } from '@element-plus/icons-vue'
+import { User, UserFilled, Key, Lock, OfficeBuilding, SwitchButton, Grid, Setting } from '@element-plus/icons-vue'
 import { changePassword } from '../api'
 import { getApiBaseUrl } from '../utils/path'
 import axios from 'axios'
@@ -20,7 +20,8 @@ const menuItems = [
   { index: '/users', title: '用户管理', icon: User },
   { index: '/roles', title: '角色管理', icon: UserFilled },
   { index: '/permissions', title: '权限管理', icon: Key },
-  { index: '/departments', title: '组织架构', icon: OfficeBuilding }
+  { index: '/departments', title: '组织架构', icon: OfficeBuilding },
+  { index: '/settings', title: '系统设置', icon: Setting }
 ]
 
 function handleMenuSelect(index: string) {

@@ -2,12 +2,14 @@
 //!
 //! 封装业务用例，协调领域实体与事件发布。
 
-use crate::application::dto::{ChangePasswordRequest, LoginResponse, PageQuery};
+use crate::application::dto::{ChangePasswordRequest, LoginResponse, PageQuery, PreAuthClaims};
+use crate::application::settings_service::SettingsAppService;
 use crate::domain::entity::{
     AdminDepartment, AdminPermission, AdminRole, AdminUser, RolePermission, UserDepartment,
     UserRole, UserRoleMapping,
 };
-use crate::domain::service::{RoleDomainService, UserDomainService};
+use crate::domain::service::{RoleDomainService, UserDomainService, PasswordPolicyService};
+use crate::application::two_factor_service::TwoFactorAppService;
 use genies::context::CONTEXT;
 use genies_auth::event::*;
 
@@ -45,7 +47,127 @@ impl AuthService {
             Err(e) => return Err(format!("服务内部错误: {}", e)),
         }
 
-        // 签发 Token
+        let uid = user.id.ok_or_else(|| "用户 ID 缺失".to_string())?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+
+        // 更新最后登录时间
+        let _ = AdminUser::update_last_login(rb, &uid).await;
+
+        // 检查是否需要 2FA
+        let require_2fa = TwoFactorAppService::is_2fa_required(uid).await.unwrap_or(false);
+
+        if require_2fa {
+            // 获取可用方式
+            let available_methods = TwoFactorAppService::get_available_methods(uid)
+                .await
+                .unwrap_or_default();
+
+            // 签发预授权 Token（5 分钟有效期）
+            let preauth_exp = now + 300;
+            let preauth_claims = PreAuthClaims {
+                uid,
+                iat: now,
+                exp: preauth_exp,
+                purpose: "2fa_preauth".to_string(),
+            };
+
+            let preauth_token = jsonwebtoken::encode(
+                &jsonwebtoken::Header::default(),
+                &preauth_claims,
+                &jsonwebtoken::EncodingKey::from_secret(jwt_secret.as_bytes()),
+            )
+            .map_err(|e| format!("签发预授权令牌失败: {}", e))?;
+
+            Ok(LoginResponse {
+                access_token: String::new(),
+                token_type: "Bearer".to_string(),
+                expires_in: 300,
+                username: user.username,
+                display_name: user.display_name,
+                require_2fa: true,
+                preauth_token: Some(preauth_token),
+                available_methods,
+                require_2fa_setup: false,
+                two_fa_setup_deadline: None,
+            })
+        } else {
+            // 签发完整 Token（用户未配置 2FA）
+            let claims = genies_auth::LocalClaims {
+                sub: user.username.clone(),
+                uid: Some(uid),
+                name: Some(user.display_name.clone()),
+                iat: now,
+                exp: now + expires_in_secs,
+            };
+
+            let token = jsonwebtoken::encode(
+                &jsonwebtoken::Header::default(),
+                &claims,
+                &jsonwebtoken::EncodingKey::from_secret(jwt_secret.as_bytes()),
+            )
+            .map_err(|e| format!("签发令牌失败: {}", e))?;
+
+            // 检查是否需要强制用户设置 2FA（系统启用 2FA 但用户未配置）
+            let (require_2fa_setup, two_fa_setup_deadline) = Self::check_2fa_enforcement().await;
+
+            Ok(LoginResponse {
+                access_token: token,
+                token_type: "Bearer".to_string(),
+                expires_in: expires_in_secs,
+                username: user.username,
+                display_name: user.display_name,
+                require_2fa: false,
+                preauth_token: None,
+                available_methods: vec![],
+                require_2fa_setup,
+                two_fa_setup_deadline,
+            })
+        }
+    }
+
+    /// 验证 2FA 并签发完整 JWT
+    pub async fn verify_2fa(
+        preauth_token: &str,
+        code: &str,
+        method: &str,
+        jwt_secret: &str,
+        expires_in_secs: usize,
+    ) -> Result<LoginResponse, String> {
+        // 1. 解码验证 PreAuthToken
+        let preauth_claims: PreAuthClaims = jsonwebtoken::decode(
+            preauth_token,
+            &jsonwebtoken::DecodingKey::from_secret(jwt_secret.as_bytes()),
+            &jsonwebtoken::Validation::default(),
+        )
+        .map_err(|e| format!("预授权令牌无效: {}", e))?
+        .claims;
+
+        if preauth_claims.purpose != "2fa_preauth" {
+            return Err("无效的预授权令牌类型".to_string());
+        }
+
+        let uid = preauth_claims.uid;
+
+        // 2. 验证 2FA
+        let verified = TwoFactorAppService::verify(uid, code, method)
+            .await
+            .map_err(|e| format!("2FA 验证失败: {}", e))?;
+
+        if !verified {
+            return Err("2FA 验证码错误".to_string());
+        }
+
+        // 3. 获取用户信息
+        let rb = &CONTEXT.rbatis;
+        let user = AdminUser::find_by_id(rb, &uid)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "用户不存在".to_string())?;
+
+        // 4. 签发完整 JWT
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -53,7 +175,7 @@ impl AuthService {
 
         let claims = genies_auth::LocalClaims {
             sub: user.username.clone(),
-            uid: user.id,
+            uid: Some(uid),
             name: Some(user.display_name.clone()),
             iat: now,
             exp: now + expires_in_secs,
@@ -66,18 +188,48 @@ impl AuthService {
         )
         .map_err(|e| format!("签发令牌失败: {}", e))?;
 
-        // 更新最后登录时间
-        if let Some(uid) = user.id {
-            let _ = AdminUser::update_last_login(rb, &uid).await;
-        }
-
         Ok(LoginResponse {
             access_token: token,
             token_type: "Bearer".to_string(),
             expires_in: expires_in_secs,
             username: user.username,
             display_name: user.display_name,
+            require_2fa: false,
+            preauth_token: None,
+            available_methods: vec![],
+            require_2fa_setup: false,
+            two_fa_setup_deadline: None,
         })
+    }
+
+    /// 检查系统 2FA 强制设置状态（系统启用 2FA 但用户未配置）
+    /// 返回 (是否强制设置, 截止时间)
+    async fn check_2fa_enforcement() -> (bool, Option<usize>) {
+        let settings = SettingsAppService::get_2fa_settings().await.unwrap_or_default();
+        if !settings.enabled {
+            return (false, None);
+        }
+
+        let enabled_at = match &settings.enabled_at {
+            Some(t) => t,
+            None => return (false, None),
+        };
+
+        // 解析 ISO8601 时间
+        let enabled_time = match chrono::DateTime::parse_from_rfc3339(enabled_at) {
+            Ok(dt) => dt.timestamp() as usize,
+            Err(_) => return (false, None),
+        };
+
+        let deadline = enabled_time + settings.grace_days as usize * 86400;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as usize;
+
+        // grace_days == 0 表示立即强制
+        let require_setup = settings.grace_days == 0 || now >= deadline;
+        (require_setup, Some(deadline))
     }
 
     /// 获取当前用户信息
@@ -112,6 +264,9 @@ impl AuthService {
             Ok(true) => {}
             _ => return Err("旧密码错误".to_string()),
         }
+
+        // 密码强度校验
+        PasswordPolicyService::validate_with_policy(&req.new_password).await?;
 
         // 加密新密码
         let new_hash = bcrypt::hash(&req.new_password, bcrypt::DEFAULT_COST)
@@ -194,6 +349,10 @@ impl UserAppService {
         let rb = &CONTEXT.rbatis;
         let username = input["username"].as_str().unwrap_or("").to_string();
         let password = input["password"].as_str().unwrap_or("123456").to_string();
+
+        // 密码强度校验
+        PasswordPolicyService::validate_with_policy(&password).await?;
+
         let display_name = input["display_name"].as_str().unwrap_or(&username).to_string();
         let email = input["email"].as_str().unwrap_or("").to_string();
         let phone = input["phone"].as_str().unwrap_or("").to_string();
@@ -305,6 +464,9 @@ impl UserAppService {
     }
 
     pub async fn reset_password(id: i64, new_password: &str) -> Result<(), String> {
+        // 密码强度校验
+        PasswordPolicyService::validate_with_policy(new_password).await?;
+
         let rb = &CONTEXT.rbatis;
         let hash = bcrypt::hash(new_password, bcrypt::DEFAULT_COST)
             .map_err(|e| format!("密码加密失败: {}", e))?;

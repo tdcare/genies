@@ -18,10 +18,10 @@ gateway: "http://58.20.184.66:6002"
 cache_type: "redis"
 
 #redis地址(cache_type为"redis"时有效)
-redis_url: "redis://:Tdcare@127.0.0.1:6379"
+redis_url: "redis://:Tdcarefor123@127.0.0.1:6379"
 
 #可持久化redis地址(cache_type为"redis"时有效)
-redis_save_url: "redis://:Tdcare@127.0.0.1:6379"
+redis_save_url: "redis://:Tdcarefor123@127.0.0.1:6379"
 
 # 数据库连接 URL，支持以下格式（需启用对应 feature）：
 #   MySQL:      mysql://user:pass@host:3306/dbname

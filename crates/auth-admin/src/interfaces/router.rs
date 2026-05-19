@@ -7,7 +7,7 @@ use salvo::prelude::*;
 
 use super::handler::{
     auth_handler, user_handler, role_handler, permission_handler, department_handler,
-    application_handler, instance_handler, sync_handler,
+    application_handler, instance_handler, sync_handler, settings_handler, two_factor_handler,
 };
 use super::admin_ui;
 use super::internal_auth::internal_auth_handler;
@@ -37,4 +37,7 @@ pub fn protected_routes() -> Router {
         .push(department_handler::routes())
         .push(application_handler::routes())
         .push(instance_handler::protected_instance_routes())
+        .push(settings_handler::routes())
+        .push(two_factor_handler::routes())
+        .push(two_factor_handler::admin_routes())
 }

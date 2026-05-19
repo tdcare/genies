@@ -7,6 +7,8 @@ pub mod user_entity;
 pub mod user_department_entity;
 pub mod application_entity;
 pub mod app_instance_entity;
+pub mod settings_entity;
+pub mod user_2fa_entity;
 
 pub use department_entity::AdminDepartment;
 pub use permission_entity::AdminPermission;
@@ -15,3 +17,5 @@ pub use user_entity::{AdminUser, UserRole, UserRoleMapping};
 pub use user_department_entity::UserDepartment;
 pub use application_entity::ApplicationEntity;
 pub use app_instance_entity::AppInstanceEntity;
+pub use settings_entity::AdminSetting;
+pub use user_2fa_entity::UserTwoFactor;

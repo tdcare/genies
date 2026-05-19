@@ -9,3 +9,5 @@ pub mod application_handler;
 pub mod app_proxy_handler;
 pub mod instance_handler;
 pub mod sync_handler;
+pub mod settings_handler;
+pub mod two_factor_handler;

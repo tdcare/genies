@@ -33,6 +33,7 @@ serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 
 log = { workspace = true }
+tracing = { workspace = true }
 
 tokio = { workspace = true }
 async-trait = { workspace = true }
@@ -58,3 +59,14 @@ flyway-rbatis = { workspace = true }
 # 静态文件嵌入
 rust-embed = { version = "8" }
 mime_guess = "2"
+
+# 验证码
+captcha = "0.0.9"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+
+# 双因素认证
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+qrcode = "0.14"
+aes-gcm = "0.10"
+rand = "0.8"

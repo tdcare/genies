@@ -1,10 +1,10 @@
 [workspace]
 members = ["*"]
-exclude = [ "target", "temp"]
+exclude = [ "target", "target_test", "temp"]
 resolver = "2"
 
 [workspace.package]
-version = "1.3.0"
+version = "1.8.0"
 edition = "2021"
 authors = ["tdcare"]
 license = "MIT"
@@ -16,8 +16,16 @@ genies = { path = "../crates/genies" }
 genies_derive = { path = "../crates/genies_derive" }
 genies_cache = { path = "../crates/cache" }
 genies_auth = { path = "../crates/auth" }
-
-
+genies_ddd = { path = "../crates/ddd" }
+genies_core = { path = "../crates/core" }
+genies_config = { path = "../crates/config" }
+genies_context = { path = "../crates/context" }
+genies_dapr = { path = "../crates/dapr" }
+genies_k8s = { path = "../crates/k8s" }
+flyway = "0.6.0"
+flyway-rbatis = "0.6.0"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
 
 log = "0.4.17"
 thiserror = "1.0"
@@ -26,7 +34,7 @@ serde_json = "1.0.89"
 serde_yaml = "0.9"
 
 
-rbatis = {version="4.8",features = ["debug_mode"]} #必选
+rbatis = {version="4.9",features = ["debug_mode"]} #必选
 rbs = { version = "4.7"}
 rbdc = { version = "4.7", default-features = false }
 rbdc-mysql={version="4.7"}
@@ -38,9 +46,11 @@ tracing-subscriber ={version= "0.3",features = ["env-filter"]}
 tokio = { version = "1.22.0", features = ["full"] }
 
 
-salvo = {version="0.89",features=["rustls"]}
+salvo = {version="0.89",features=["rustls","oapi","affix-state"]}
 
 async-trait = "0.1.59"
 
 inventory = "0.3"
 anyhow = "1.0.66"
+feignhttp = { version = "0.5", features = ["json"] }
+once_cell = "1"
