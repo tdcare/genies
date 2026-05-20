@@ -105,11 +105,16 @@ struct SimpleResp {
 // 核心 HTTP 操作
 // ============================================================================
 
-fn build_client() -> reqwest::Client {
-    reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(10))
-        .build()
-        .expect("failed to build reqwest client")
+use std::sync::OnceLock;
+
+fn build_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("failed to build reqwest client")
+    })
 }
 
 /// 启动时注册实例到 auth-admin

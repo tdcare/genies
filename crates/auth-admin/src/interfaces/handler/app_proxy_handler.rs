@@ -4,12 +4,26 @@
 //! 使用 reqwest::Client 将请求转发到目标服务的 /auth/* 端点。
 //! 代理直接透传目标微服务的原始 HTTP 响应（状态码 + body），不做 RespVO 包装。
 
+use std::sync::OnceLock;
+
 use salvo::prelude::*;
 use salvo::oapi::extract::*;
 use salvo::writing::Text;
 
 use crate::application::app_service::ApplicationAppService;
 use crate::application::service::SyncAppService;
+
+/// 共享的 reqwest::Client，避免每次代理请求都创建新的 HttpClient
+fn shared_client() -> &'static reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .pool_max_idle_per_host(20)
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .expect("failed to build shared reqwest client")
+    })
+}
 
 /// 返回代理子路由列表，需由调用方挂载到 `{id}` 节点下
 pub fn proxy_sub_routes() -> Vec<Router> {
@@ -92,7 +106,7 @@ pub async fn proxy_list_schemas(
         format!("{}/auth/schemas?{}", base_url.trim_end_matches('/'), query_string)
     };
 
-    let mut builder = reqwest::Client::new().get(&url);
+    let mut builder = shared_client().get(&url);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -122,7 +136,7 @@ pub async fn proxy_list_policies(
         format!("{}/auth/policies?{}", base_url.trim_end_matches('/'), query_string)
     };
 
-    let mut builder = reqwest::Client::new().get(&url);
+    let mut builder = shared_client().get(&url);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -148,7 +162,7 @@ pub async fn proxy_add_policy(
 
     let url = format!("{}/auth/policies", base_url.trim_end_matches('/'));
 
-    let mut builder = reqwest::Client::new().post(&url).json(&body.into_inner());
+    let mut builder = shared_client().post(&url).json(&body.into_inner());
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -174,7 +188,7 @@ pub async fn proxy_remove_policy(
 
     let url = format!("{}/auth/policies/{}", base_url.trim_end_matches('/'), policy_id.into_inner());
 
-    let mut builder = reqwest::Client::new().delete(&url);
+    let mut builder = shared_client().delete(&url);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -204,7 +218,7 @@ pub async fn proxy_list_roles(
         format!("{}/auth/roles?{}", base_url.trim_end_matches('/'), query_string)
     };
 
-    let mut builder = reqwest::Client::new().get(&url);
+    let mut builder = shared_client().get(&url);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -230,7 +244,7 @@ pub async fn proxy_add_role(
 
     let url = format!("{}/auth/roles", base_url.trim_end_matches('/'));
 
-    let mut builder = reqwest::Client::new().post(&url).json(&body.into_inner());
+    let mut builder = shared_client().post(&url).json(&body.into_inner());
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -260,7 +274,7 @@ pub async fn proxy_list_groups(
         format!("{}/auth/groups?{}", base_url.trim_end_matches('/'), query_string)
     };
 
-    let mut builder = reqwest::Client::new().get(&url);
+    let mut builder = shared_client().get(&url);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -286,7 +300,7 @@ pub async fn proxy_add_group(
 
     let url = format!("{}/auth/groups", base_url.trim_end_matches('/'));
 
-    let mut builder = reqwest::Client::new().post(&url).json(&body.into_inner());
+    let mut builder = shared_client().post(&url).json(&body.into_inner());
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -312,7 +326,7 @@ pub async fn proxy_remove_role(
 
     let url = format!("{}/auth/roles/{}", base_url.trim_end_matches('/'), role_id.into_inner());
 
-    let mut builder = reqwest::Client::new().delete(&url);
+    let mut builder = shared_client().delete(&url);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -338,7 +352,7 @@ pub async fn proxy_remove_group(
 
     let url = format!("{}/auth/groups/{}", base_url.trim_end_matches('/'), group_id.into_inner());
 
-    let mut builder = reqwest::Client::new().delete(&url);
+    let mut builder = shared_client().delete(&url);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -369,7 +383,7 @@ pub async fn proxy_sync_user_roles(
 
     let url = format!("{}/auth/sync/receive-user-roles", base_url.trim_end_matches('/'));
 
-    let mut builder = reqwest::Client::new().post(&url).json(&mappings);
+    let mut builder = shared_client().post(&url).json(&mappings);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }
@@ -394,7 +408,7 @@ pub async fn proxy_reload(
 
     let url = format!("{}/auth/reload", base_url.trim_end_matches('/'));
 
-    let mut builder = reqwest::Client::new().post(&url);
+    let mut builder = shared_client().post(&url);
     if let Some(auth) = &auth_header {
         builder = builder.header("Authorization", auth.as_str());
     }

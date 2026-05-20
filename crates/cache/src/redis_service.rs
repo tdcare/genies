@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use log::error;
 use redis::aio::MultiplexedConnection;
+use tokio::sync::Mutex;
 
 use crate::cache_service::ICacheService;
 use async_trait::async_trait;
@@ -19,6 +20,7 @@ use redis::RedisResult;
 ///Redis缓存服务
 pub struct RedisService {
     pub client: redis::Client,
+    conn: Mutex<Option<MultiplexedConnection>>,
 }
 
 impl RedisService {
@@ -26,17 +28,33 @@ impl RedisService {
         log::info!("conncect redis:{}", &url);
         let client = redis::Client::open(url).unwrap();
         log::info!("conncect redis success!");
-        Self { client }
+        Self { client, conn: Mutex::new(None) }
     }
 
+    /// 获取或创建共享的 MultiplexedConnection（复用连接，避免每次操作新建连接）
     pub async fn get_conn(&self) -> Result<MultiplexedConnection> {
-        let conn = self.client.get_multiplexed_async_connection().await;
-        if conn.is_err() {
-            let err = format!("RedisService connect fail:{}", conn.err().unwrap());
-            error!("{}", err);
-            return Err(Error::from(err));
+        // 快速路径：直接复用已缓存的连接
+        {
+            let guard = self.conn.lock().await;
+            if let Some(conn) = guard.as_ref() {
+                return Ok(conn.clone());
+            }
         }
-        return Ok(conn.unwrap());
+        // 慢路径：创建新连接并缓存
+        let new_conn = self.client.get_multiplexed_async_connection()
+            .await
+            .map_err(|e| {
+                let err = format!("RedisService connect fail:{}", e);
+                error!("{}", err);
+                Error::from(err)
+            })?;
+        let mut guard = self.conn.lock().await;
+        // 双重检查，避免竞态导致连接泄漏
+        if let Some(conn) = guard.as_ref() {
+            return Ok(conn.clone());
+        }
+        *guard = Some(new_conn.clone());
+        Ok(new_conn)
     }
 }
 
