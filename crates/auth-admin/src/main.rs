@@ -99,7 +99,7 @@ async fn main() {
         log::info!("[auth-admin] 自注册成功, instance_id={}", instance_id);
     }
 
-    // 8. 启动后台心跳循环
+    // 8. 启动后台心跳循环（Redis 心跳，每 heartbeat_interval 秒一次）
     let heartbeat_interval = CONTEXT.config.heartbeat_interval;
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(heartbeat_interval));
@@ -111,17 +111,17 @@ async fn main() {
         }
     });
 
-    // 9. 启动后台实例清理任务
+    // 9. 启动后台实例清理任务（Redis 心跳检测 + DB 清理）
     tokio::spawn(async {
         let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
         loop {
             interval.tick().await;
-            // 标记超过90秒未心跳的实例为离线
-            if let Err(e) = genies_auth_admin::domain::service::AppInstanceDomainService::cleanup_stale(90).await {
+            // 对比 DB 在线实例与 Redis 心跳 key，标记离线
+            if let Err(e) = genies_auth_admin::domain::service::AppInstanceDomainService::cleanup_stale().await {
                 log::warn!("[auth-admin] Failed to cleanup stale instances: {}", e);
             }
-            // 删除离线超过1小时的实例
-            if let Err(e) = genies_auth_admin::domain::service::AppInstanceDomainService::delete_stale_instances(3600).await {
+            // 删除离线超过1小时的 DB 记录
+            if let Err(e) = genies_auth_admin::domain::service::AppInstanceDomainService::delete_stale_instances().await {
                 log::warn!("[auth-admin] Failed to delete stale instances: {}", e);
             }
         }

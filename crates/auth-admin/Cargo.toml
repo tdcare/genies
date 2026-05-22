@@ -70,3 +70,7 @@ totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
 qrcode = "0.14"
 aes-gcm = "0.10"
 rand = "0.8"
+
+# OAuth 2.0
+sha2 = "0.10"
+hex = "0.4"

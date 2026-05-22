@@ -44,6 +44,11 @@ const routes: RouteRecordRaw[] = [
     component: () => import('../views/DepartmentManager.vue')
   },
   {
+    path: '/oauth',
+    name: 'OAuthClientManager',
+    component: () => import('../views/OAuthClientManager.vue')
+  },
+  {
     path: '/profile',
     name: 'Profile',
     component: () => import('../views/Profile.vue')

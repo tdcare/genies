@@ -8,6 +8,7 @@ use salvo::prelude::*;
 use super::handler::{
     auth_handler, user_handler, role_handler, permission_handler, department_handler,
     application_handler, instance_handler, sync_handler, settings_handler, two_factor_handler,
+    oauth_handler, oauth_client_handler,
 };
 use super::admin_ui;
 use super::internal_auth::internal_auth_handler;
@@ -17,6 +18,7 @@ pub fn public_routes() -> Router {
     Router::new()
         .push(auth_handler::public_routes())
         .push(admin_ui::auth_admin_ui_router())
+        .push(oauth_handler::oauth_routes())
 }
 
 /// 构建仅需 JWT 签名验证的内部接口路由（服务间调用）
@@ -40,4 +42,5 @@ pub fn protected_routes() -> Router {
         .push(settings_handler::routes())
         .push(two_factor_handler::routes())
         .push(two_factor_handler::admin_routes())
+        .push(oauth_client_handler::routes())
 }

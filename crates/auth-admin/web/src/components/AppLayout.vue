@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, UserFilled, Key, Lock, OfficeBuilding, SwitchButton, Grid, Setting } from '@element-plus/icons-vue'
+import { User, UserFilled, Key, Lock, OfficeBuilding, SwitchButton, Grid, Setting, Connection } from '@element-plus/icons-vue'
 import { changePassword } from '../api'
 import { getApiBaseUrl } from '../utils/path'
 import axios from 'axios'
@@ -21,6 +21,7 @@ const menuItems = [
   { index: '/roles', title: '角色管理', icon: UserFilled },
   { index: '/permissions', title: '权限管理', icon: Key },
   { index: '/departments', title: '组织架构', icon: OfficeBuilding },
+  { index: '/oauth', title: 'OAuth客户端', icon: Connection },
   { index: '/settings', title: '系统设置', icon: Setting }
 ]
 

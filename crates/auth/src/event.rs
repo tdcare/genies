@@ -198,6 +198,42 @@ pub struct RolePermissionRevokedEvent {
     pub action: String,
 }
 
+// ============================================================================
+// OAuth 客户端事件
+// ============================================================================
+
+/// OAuth 客户端创建事件
+#[derive(Debug, Clone, Serialize, Deserialize, Default, DomainEvent)]
+#[event_type("auth.oauth_client.created")]
+#[event_type_version("V1")]
+#[event_source("auth-admin")]
+pub struct OAuthClientCreatedEvent {
+    pub id: i64,
+    pub client_id: String,
+    pub client_name: String,
+}
+
+/// OAuth 客户端更新事件
+#[derive(Debug, Clone, Serialize, Deserialize, Default, DomainEvent)]
+#[event_type("auth.oauth_client.updated")]
+#[event_type_version("V1")]
+#[event_source("auth-admin")]
+pub struct OAuthClientUpdatedEvent {
+    pub id: i64,
+    pub client_id: String,
+    pub client_name: String,
+}
+
+/// OAuth 客户端删除事件
+#[derive(Debug, Clone, Serialize, Deserialize, Default, DomainEvent)]
+#[event_type("auth.oauth_client.deleted")]
+#[event_type_version("V1")]
+#[event_source("auth-admin")]
+pub struct OAuthClientDeletedEvent {
+    pub id: i64,
+    pub client_id: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

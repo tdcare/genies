@@ -34,6 +34,27 @@ pub struct LocalClaims {
     pub exp: usize,
 }
 
+/// OAuth 2.0 JWT Claims（OAuth Access Token）
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OAuthClaims {
+    /// 用户名
+    pub sub: String,
+    /// 用户 ID
+    pub uid: Option<i64>,
+    /// 显示名称
+    pub name: Option<String>,
+    /// OAuth Client ID
+    pub client_id: String,
+    /// 空格分隔的 scopes
+    pub scope: String,
+    /// JWT ID（唯一标识）
+    pub jti: String,
+    /// 签发时间 (UTC 秒)
+    pub iat: usize,
+    /// 过期时间 (UTC 秒)
+    pub exp: usize,
+}
+
 // ============================================================================
 // 本地认证状态（JWT Secret）
 // ============================================================================
@@ -86,6 +107,18 @@ pub fn verify_token(token: &str, secret: &str) -> Result<LocalClaims, String> {
     )
     .map(|data| data.claims)
     .map_err(|e| format!("JWT 验证失败: {}", e))
+}
+
+/// 验证 OAuth JWT Token，返回 OAuthClaims
+pub fn verify_oauth_token(token: &str, secret: &str) -> Result<OAuthClaims, String> {
+    let token = token.strip_prefix("Bearer ").unwrap_or(token);
+    decode::<OAuthClaims>(
+        token,
+        &DecodingKey::from_secret(secret.as_bytes()),
+        &Validation::default(),
+    )
+    .map(|data| data.claims)
+    .map_err(|e| format!("OAuth JWT 验证失败: {}", e))
 }
 
 // ============================================================================

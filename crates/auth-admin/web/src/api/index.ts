@@ -559,6 +559,83 @@ export const syncAppUserRoles = (appId: number) =>
   api.post(`/apps/${appId}/sync-user-roles`)
 
 // ============================================================================
+// OAuth 客户端 API
+// ============================================================================
+
+export interface OAuthClientRecord {
+  id: number
+  client_id: string
+  client_name: string
+  application_id: number
+  redirect_uris: string[]
+  grant_types: string[]
+  scopes: string[]
+  token_format: string
+  access_token_ttl: number
+  refresh_token_ttl: number
+  require_pkce: number
+  status: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface OAuthClientCreateRequest {
+  client_name: string
+  application_id: number
+  redirect_uris: string[]
+  grant_types: string[]
+  scopes: string[]
+  token_format: string
+  access_token_ttl: number
+  refresh_token_ttl: number
+  require_pkce: number
+}
+
+export interface OAuthClientCreateResponse extends OAuthClientRecord {
+  client_secret: string
+}
+
+export interface OAuthClientUpdateRequest {
+  client_name: string
+  redirect_uris: string[]
+  grant_types: string[]
+  scopes: string[]
+  token_format: string
+  access_token_ttl: number
+  refresh_token_ttl: number
+  require_pkce: number
+  status: number
+}
+
+export async function getOAuthClients(params: { page?: number; size?: number; keyword?: string }): Promise<PageData<OAuthClientRecord>> {
+  const response = await api.get<ApiResponse<PageData<OAuthClientRecord>>>('/oauth/clients', { params })
+  return response.data.data
+}
+
+export async function getOAuthClient(id: number): Promise<OAuthClientRecord> {
+  const response = await api.get<ApiResponse<OAuthClientRecord>>(`/oauth/clients/${id}`)
+  return response.data.data
+}
+
+export async function createOAuthClient(data: OAuthClientCreateRequest): Promise<OAuthClientCreateResponse> {
+  const response = await api.post<ApiResponse<OAuthClientCreateResponse>>('/oauth/clients', data)
+  return response.data.data
+}
+
+export async function updateOAuthClient(id: number, data: OAuthClientUpdateRequest): Promise<void> {
+  await api.put(`/oauth/clients/${id}`, data)
+}
+
+export async function deleteOAuthClient(id: number): Promise<void> {
+  await api.delete(`/oauth/clients/${id}`)
+}
+
+export async function regenerateOAuthSecret(id: number): Promise<{ client_secret: string }> {
+  const response = await api.post<ApiResponse<{ client_secret: string }>>(`/oauth/clients/${id}/regenerate-secret`)
+  return response.data.data
+}
+
+// ============================================================================
 // Instances API（实例管理）
 // ============================================================================
 

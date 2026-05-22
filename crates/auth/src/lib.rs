@@ -69,6 +69,9 @@ pub mod event;
 /// 认证中间件（JWT 验证 + 组合中间件）
 pub mod auth_middleware;
 
+/// OAuth 2.0 资源服务器认证中间件
+pub mod oauth2_middleware;
+
 /// Dapr 事件订阅处理（接收 auth-admin 服务的同步事件）
 pub mod event_handler;
 
@@ -101,6 +104,13 @@ pub use auth_middleware::{
     verify_token,
 };
 
+// OAuth 2.0 认证
+pub use auth_middleware::{OAuthClaims, verify_oauth_token};
+pub use oauth2_middleware::{
+    OAuth2AuthConfig,
+    oauth2_auth, combined_oauth2_auth,
+};
+
 // 事件类型（供 auth-admin 发布事件使用）
 pub use event::{
     UserCreatedEvent, UserUpdatedEvent, UserDeletedEvent,
@@ -108,6 +118,7 @@ pub use event::{
     PermissionCreatedEvent, PermissionUpdatedEvent, PermissionDeletedEvent,
     UserRoleAssignedEvent, UserRoleRevokedEvent,
     RolePermissionAssignedEvent, RolePermissionRevokedEvent,
+    OAuthClientCreatedEvent, OAuthClientUpdatedEvent, OAuthClientDeletedEvent,
 };
 
 // 服务注册

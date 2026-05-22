@@ -11,3 +11,5 @@ pub mod instance_handler;
 pub mod sync_handler;
 pub mod settings_handler;
 pub mod two_factor_handler;
+pub mod oauth_handler;
+pub mod oauth_client_handler;

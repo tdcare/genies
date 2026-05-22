@@ -7,3 +7,7 @@ pub mod application_repository;
 pub mod app_instance_repository;
 pub mod settings_repository;
 pub mod user_2fa_repository;
+pub mod oauth_client_repository;
+pub mod oauth_authorization_code_repository;
+pub mod oauth_access_token_repository;
+pub mod oauth_refresh_token_repository;

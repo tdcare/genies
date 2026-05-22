@@ -12,6 +12,7 @@ pub mod captcha_service;
 pub mod totp_service;
 pub mod sms_service;
 pub mod second_password_service;
+pub mod oauth_domain_service;
 
 pub use user_service::UserDomainService;
 pub use role_service::RoleDomainService;
@@ -23,3 +24,4 @@ pub use captcha_service::CaptchaService;
 pub use totp_service::TotpService;
 pub use sms_service::SmsService;
 pub use second_password_service::SecondPasswordService;
+pub use oauth_domain_service::OAuthDomainService;

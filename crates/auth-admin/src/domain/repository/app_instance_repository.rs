@@ -71,4 +71,20 @@ impl AppInstanceEntity {
     pub async fn count_by_app_name(rb: &dyn Executor, app_name: &str) -> rbatis::Result<u64> {
         impled!()
     }
+
+    /// 查询所有在线实例（status = 1）
+    #[py_sql("SELECT * FROM auth_app_instances WHERE status = 1")]
+    pub async fn select_online(rb: &dyn Executor) -> rbatis::Result<Vec<AppInstanceEntity>> {
+        impled!()
+    }
+
+    /// 按 instance_id 将指定实例标记为离线
+    #[py_sql("
+        UPDATE auth_app_instances
+        SET status = 0
+        WHERE instance_id = #{instance_id} AND status = 1
+    ")]
+    pub async fn mark_offline_by_id(rb: &dyn Executor, instance_id: &i64) -> rbatis::Result<ExecResult> {
+        impled!()
+    }
 }
