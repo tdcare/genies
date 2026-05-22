@@ -11,6 +11,7 @@ genies_auth provides a complete role-based access control (RBAC) solution with b
 ## Features
 
 - **Hybrid Permission Model**: API endpoint-level + field-level access control
+- **OAuth 2.0 Resource Server**: Validate access tokens issued by auth-admin via JWT (fast) or introspect (fallback for opaque tokens)
 - **Deny-Mode Blacklist**: Default allow, only deny rules take effect (`e = !some(where (p.eft == deny))`)
 - **Dynamic Hot Reload**: Modify permissions at runtime via Admin API, no restart required
 - **Multi-Instance Sync**: Redis cache version numbers for distributed cache invalidation
@@ -24,7 +25,9 @@ genies_auth provides a complete role-based access control (RBAC) solution with b
 | Component | File | Description |
 |-----------|------|-------------|
 | `EnforcerManager` | enforcer_manager.rs | Casbin Enforcer manager with hot reload, `RwLock<Arc<Enforcer>>` for concurrency safety |
-| `casbin_auth` | middleware.rs | Salvo middleware for JWT auth + Casbin permission check, injects enforcer/subject into Depot |
+| `local_auth` / `combined_auth` | auth_middleware.rs | JWT authentication middleware for local JWT tokens (issued by auth-admin) |
+| `oauth2_auth` / `combined_oauth2_auth` | oauth2_middleware.rs | OAuth 2.0 resource server middleware — validates OAuth tokens via JWT (fast) or introspect (fallback) |
+| `casbin_auth` | middleware.rs | Salvo middleware for Casbin permission check, injects enforcer/subject into Depot |
 | `auth_router` | admin_api.rs | Admin API router (14 endpoints with OpenAPI annotations for policy/role/group/model CRUD + reload) |
 | `RBatisAdapter` | adapter.rs | Casbin Adapter implementation backed by MySQL |
 | `extract_and_sync_schemas` | schema_extractor.rs | Extract schemas from OpenAPI docs and sync to database |
@@ -34,10 +37,65 @@ genies_auth provides a complete role-based access control (RBAC) solution with b
 ### Middleware Flow
 
 ```
-Request → salvo_auth(JWT) → casbin_auth(Permission) → Handler → Writer(Field Filter) → Response
+# Local JWT auth (default for internal services)
+Request → local_auth(JWT) → casbin_auth(Permission) → Handler → Writer(Field Filter) → Response
+
+# OAuth 2.0 resource server (for third-party API access)
+Request → oauth2_auth(OAuth Token) → casbin_auth(Permission) → Handler → Writer(Field Filter) → Response
+
+# Combo middleware (auth + permission in one hoop)
+Request → combined_auth(JWT + Casbin) → Handler → Writer(Field Filter) → Response
+        → combined_oauth2_auth(OAuth + Casbin) → Handler → Writer(Field Filter) → Response
 ```
 
-## Quick Start
+## Authentication Middleware
+
+genies_auth provides two authentication strategies, each with a standalone and a combined (auth + Casbin permission check) variant:
+
+| Middleware | Auth Method | Casbin Check | Use Case |
+|------------|------------|--------------|----------|
+| `local_auth` | JWT (shared secret with auth-admin) | No | Internal service-to-service calls |
+| `combined_auth` | JWT (shared secret) | Yes | Internal services needing permission control |
+| `oauth2_auth` | OAuth 2.0 (JWT + introspect fallback) | No | Third-party API access using OAuth tokens |
+| `combined_oauth2_auth` | OAuth 2.0 | Yes | Third-party APIs needing permission control |
+
+### OAuth 2.0 Resource Server
+
+The `oauth2_auth` middleware validates OAuth 2.0 access tokens issued by auth-admin using a **dual verification strategy**:
+
+1. **JWT local validation (fast)**: For JWT-format tokens, validates the signature using the shared JWT secret — no network call needed.
+2. **Introspect fallback (remote)**: If JWT validation fails (e.g., opaque token or wrong format), calls auth-admin's `/oauth/introspect` endpoint via HTTP.
+
+```rust
+use genies_auth::{oauth2_auth, combined_oauth2_auth, OAuth2AuthConfig};
+
+// Configure OAuth2 resource server
+let oauth2_config = OAuth2AuthConfig {
+    jwt_secret: "shared_secret_with_auth_admin".to_string(),
+    introspect_url: "http://127.0.0.1:9099/auth-admin/oauth/introspect".to_string(),
+    service_token: Some("internal_service_token".to_string()), // for authenticating to introspect
+};
+
+// Apply to routes
+let router = Router::new()
+    .push(Router::with_path("/api/protected").get(handler))
+    .hoop(affix_state::inject(oauth2_config))
+    .hoop(oauth2_auth)                          // OAuth2 token validation
+    .hoop(affix_state::inject(mgr))
+    .hoop(casbin_auth);                          // Casbin permission check
+
+// Or use combined_oauth2_auth for both in one hoop:
+let router = Router::new()
+    .push(Router::with_path("/api/protected").get(handler))
+    .hoop(affix_state::inject(oauth2_config))
+    .hoop(affix_state::inject(mgr))
+    .hoop(combined_oauth2_auth);                 // OAuth2 auth + Casbin in one
+```
+
+After successful authentication, the middleware injects into `Depot`:
+- `jwtToken`: `JWTToken` struct (parsed claims)
+- `subject`: User identifier string (e.g., `"user:123"`)
+- `oauth_claims`: `OAuthClaims` (with `client_id`, `scope`, `uid`, `name`, `jti`)
 
 ### 1. Add Dependency
 

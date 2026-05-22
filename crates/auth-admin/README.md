@@ -8,6 +8,7 @@ genies_auth_admin is the **management interface** of the Genies permission syste
 
 - A full set of RESTful APIs for managing users, roles, permissions, departments, and applications
 - Built-in JWT-based authentication (login / logout / token refresh)
+- **OAuth 2.0 Authorization Server** — RFC 6749 compliant with PKCE support
 - A Vue 3 + Element Plus web UI embedded directly into the binary via `rust-embed`
 - Multi-application API proxy — manage Casbin policies of remote microservices from a single dashboard
 - Domain-Driven Design (DDD) layered architecture
@@ -21,6 +22,7 @@ genies_auth_admin is the **management interface** of the Genies permission syste
 - **Application Registry**: Register microservices with their base URLs and manage their authorization remotely
 - **API Proxy**: Forward policy / role / group / schema / reload requests to target microservices' `/auth/*` endpoints
 - **Local JWT Auth**: Self-contained login flow with bcrypt password hashing and JWT token issuance
+- **OAuth 2.0 Authorization Server**: RFC 6749 compliant, supporting authorization_code (with PKCE), password, client_credentials, and refresh_token grant types
 - **Casbin Integration**: JWT authentication + Casbin RBAC permission check on all protected routes
 - **Field-Level Permission Filtering**: Inherits `genies_auth`'s `#[casbin]` macro for response field filtering
 - **Embedded Web UI**: SPA frontend served from `/auth-admin/ui/` with intelligent cache control
@@ -46,17 +48,25 @@ src/
 │   │   ├── permission_handler.rs  # Permission CRUD
 │   │   ├── department_handler.rs  # Department CRUD + move
 │   │   ├── application_handler.rs # Application registry CRUD
+│   │   ├── oauth_handler.rs       #   OAuth 2.0 endpoints (authorize/token/introspect/revoke)
+│   │   ├── oauth_client_handler.rs #  OAuth client CRUD management
 │   │   └── app_proxy_handler.rs   # Multi-app API proxy
 │   └── dto/                   #   Request / Response DTOs
 ├── application/               # Application Layer
 │   ├── service.rs             #   AuthService, UserService, RoleService, etc.
 │   ├── app_service.rs         #   ApplicationAppService
+│   ├── oauth_token_service.rs #   OAuthTokenService (authorize/token/introspect/revoke)
+│   ├── oauth_client_service.rs #  OAuthClientAppService (client CRUD)
+│   ├── oauth_dto.rs           #   OAuth DTOs
 │   └── dto.rs                 #   Shared DTOs (LoginResponse, PageQuery, etc.)
 ├── domain/                    # Domain Layer
-│   ├── entity/                #   AdminUser, AdminRole, AdminPermission, AdminDepartment, ApplicationEntity
+│   ├── entity/                #   AdminUser, AdminRole, AdminPermission, AdminDepartment, ApplicationEntity,
+│   │                          #     OAuthClientEntity, OAuthAuthorizationCodeEntity, OAuthAccessTokenEntity,
+│   │                          #     OAuthRefreshTokenEntity
 │   ├── aggregate/             #   Aggregate roots (User, Role, Permission, Department)
-│   ├── service/               #   UserDomainService, RoleDomainService, ApplicationDomainService
-│   ├── repository/            #   RBatis repository implementations
+│   ├── service/               #   UserDomainService, RoleDomainService, ApplicationDomainService,
+│   │                          #     OAuthDomainService
+│   ├── repository/            #   RBatis repository implementations (incl. oauth_*_repository and *_repository)
 │   └── event/                 #   Domain events (UserEvent, RoleEvent)
 └── infrastructure/            # Infrastructure Layer
     └── migration.rs           #   Flyway migration runner
@@ -68,7 +78,7 @@ src/
 Request → JWT Auth (local_auth) → Casbin RBAC (casbin_auth) → Handler → Writer (field filter) → Response
 ```
 
-Public routes (login, logout, refresh, admin UI) bypass authentication.
+Public routes (login, logout, refresh, OAuth authorize/token/introspect/revoke, admin UI) bypass authentication.
 
 ## Tech Stack
 
@@ -96,6 +106,10 @@ Public routes (login, logout, refresh, admin UI) bypass authentication.
 | `/auth-admin/login` | POST | Login with username & password |
 | `/auth-admin/logout` | POST | Logout |
 | `/auth-admin/refresh` | POST | Refresh JWT token |
+| `/auth-admin/oauth/authorize` | GET | OAuth 2.0 authorization endpoint |
+| `/auth-admin/oauth/token` | POST | OAuth 2.0 token endpoint |
+| `/auth-admin/oauth/introspect` | POST | OAuth 2.0 token introspection |
+| `/auth-admin/oauth/revoke` | POST | OAuth 2.0 token revocation |
 | `/auth-admin/ui/` | GET | Admin Web UI |
 
 ### Protected Routes (JWT + Casbin)
@@ -186,6 +200,57 @@ Public routes (login, logout, refresh, admin UI) bypass authentication.
 | `/auth-admin/apps/{id}/groups/{group_id}` | DELETE | Proxy: remove group from target app |
 | `/auth-admin/apps/{id}/reload` | POST | Proxy: reload target app's Enforcer |
 
+#### OAuth 2.0
+
+The auth-admin provides an RFC 6749 compliant OAuth 2.0 Authorization Server. Token endpoints use `application/x-www-form-urlencoded` format.
+
+**Supported Grant Types:**
+
+| Grant Type | Description | Requires client_secret | Requires user auth |
+|------------|-------------|----------------------|--------------------|
+| `authorization_code` | Authorization Code grant (with PKCE) | No (PKCE only) | Yes (via `/oauth/authorize`) |
+| `password` | Resource Owner Password Credentials | Yes | Yes (username + password) |
+| `client_credentials` | Machine-to-machine | Yes | No |
+| `refresh_token` | Refresh an expired access token | Yes | No |
+
+**Authorization Code Flow:**
+
+```
+1. GET /oauth/authorize?response_type=code&client_id=xxx&redirect_uri=xxx
+   Authorization: Bearer <JWT>
+   → 302 redirect: {redirect_uri}?code=<AUTH_CODE>&state=xxx
+
+2. POST /oauth/token
+   grant_type=authorization_code&code=<AUTH_CODE>&client_id=xxx&redirect_uri=xxx
+   → { access_token, token_type, expires_in, refresh_token, scope }
+
+3. POST /oauth/token
+   grant_type=refresh_token&refresh_token=<RT>&client_id=xxx&client_secret=<SECRET>
+   → { access_token, token_type, expires_in, refresh_token (rotated), scope }
+
+4. POST /oauth/introspect
+   token=<ACCESS_TOKEN>  →  { active: true, scope, client_id, username, sub, exp, iat }
+
+5. POST /oauth/revoke
+   token=<TOKEN>&token_type_hint=refresh_token  →  200 OK (empty body)
+```
+
+- Authorization endpoint reads user identity from `Authorization: Bearer <JWT>` header
+- Authorization codes expire in 10 minutes and are single-use
+- Refresh tokens are rotated (old one revoked on each use)
+- PKCE (S256) is supported for authorization_code grant
+
+#### OAuth Client Management
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/auth-admin/oauth/clients` | GET | Paginated client list |
+| `/auth-admin/oauth/clients` | POST | Create OAuth client |
+| `/auth-admin/oauth/clients/{id}` | GET | Get client detail |
+| `/auth-admin/oauth/clients/{id}` | PUT | Update client |
+| `/auth-admin/oauth/clients/{id}` | DELETE | Delete client |
+| `/auth-admin/oauth/clients/{id}/regenerate-secret` | POST | Regenerate client secret |
+
 ## Database Tables
 
 Auto-created via Flyway migrations:
@@ -199,6 +264,10 @@ Auto-created via Flyway migrations:
 | `auth_admin_user_roles` | User-role associations |
 | `auth_admin_role_permissions` | Role-permission associations |
 | `auth_admin_applications` | Registered microservice applications |
+| `auth_oauth_clients` | OAuth 2.0 client registrations |
+| `auth_oauth_authorization_codes` | Temporary authorization codes (10-min TTL) |
+| `auth_oauth_access_tokens` | OAuth access tokens (opaque mode only) |
+| `auth_oauth_refresh_tokens` | OAuth refresh tokens (with rotation) |
 | `message` | Dapr message outbox |
 
 Tables from `genies_auth` migrations (created first):
