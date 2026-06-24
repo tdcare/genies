@@ -7,10 +7,14 @@ description: Guide for using genies_config configuration management. Use when se
 
 ## Overview
 
-genies_config 是 Genies 框架的配置管理库，提供基于 YAML 的配置加载和 `#[derive(ConfigCore)]` 宏支持。纯库 crate，无 binary。
+genies_config 是 Genies 框架的配置管理库，提供基于 YAML 的配置加载和 `#[derive(Config)]` 宏支持。纯库 crate，无 binary。
+
+> **注意 1**：外部程序请使用 `#[derive(Config)]`。`#[derive(ConfigCore)]` 仅用于框架内部（如 `ApplicationConfig`），以避免循环依赖。两者功能完全相同，仅内部错误类型路径不同。
+>
+> **注意 2**：配置字段**仅支持基本类型**，禁止嵌套 YAML（struct/map 类型字段）。支持的类型：`String`、`bool`、整数、浮点、`Option<T>`、`Vec<T>`。如需嵌套配置，须拆分为独立配置结构体并单独加载。
 
 **核心特性：**
-- `ConfigCore` 派生宏自动生成 `from_sources()` 方法
+- `Config` 派生宏自动生成 `from_sources()` 方法
 - YAML 配置文件加载（`application.yml`）
 - 环境变量覆盖
 - 默认值支持（`#[config(default = "...")]`）
@@ -116,6 +120,51 @@ white_list_api:
   - "/daprsub/*"
 ```
 
+## 反例：不支持的嵌套 YAML
+
+以下写法 **不被支持**，因为配置系统无法将嵌套 YAML 映射到 struct 字段：
+
+```yaml
+# ❌ 错误：不支持嵌套对象
+server:
+  host: "0.0.0.0"
+  port: 5800
+```
+
+```yaml
+# ❌ 错误：不支持 Map/Dict 结构
+redis:
+  url: "redis://127.0.0.1:6379"
+  pool_size: 10
+```
+
+**替代方案**：将嵌套结构拆分为独立的一级字段：
+
+```yaml
+# ✅ 正确：拆分为一级字段
+server_host: "0.0.0.0"
+server_port: 5800
+redis_url: "redis://127.0.0.1:6379"
+redis_pool_size: 10
+```
+
+或者将子配置定义为独立的配置结构体，单独加载：
+
+```rust
+// 分别定义，分别加载
+#[derive(Config, Debug, Deserialize)]
+pub struct ServerConfig {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Config, Debug, Deserialize)]
+pub struct RedisConfig {
+    pub url: String,
+    pub pool_size: u32,
+}
+```
+
 ## 加载配置
 
 ```rust
@@ -131,13 +180,15 @@ let config = CONTEXT.config();
 
 ## 自定义配置结构体
 
-### ConfigCore 宏使用
+> **字段类型限制**：仅支持基本类型 — `String`、`bool`、整数（`u8`~`u128`、`i8`~`i128`）、浮点（`f32`/`f64`）、`Option<T>`、`Vec<T>`。**禁止使用嵌套 struct 或 `HashMap` 等复合类型作为字段**。若需嵌套配置，请拆分为独立配置结构体分别加载（见上方反例章节）。
+
+### Config 宏使用
 
 ```rust
-use genies_derive::ConfigCore;
+use genies_derive::Config;
 use serde::Deserialize;
 
-#[derive(ConfigCore, Debug, Deserialize)]
+#[derive(Config, Debug, Deserialize)]
 pub struct MyConfig {
     // 必填字段
     pub host: String,
@@ -251,7 +302,7 @@ if gateway.starts_with("http://") || gateway.starts_with("https://") {
 ## 配置验证
 
 ```rust
-#[derive(ConfigCore, Debug, Deserialize)]
+#[derive(Config, Debug, Deserialize)]
 pub struct ValidatedConfig {
     // 范围验证
     #[config(validate(range(min = 1, max = 65535)))]
@@ -303,4 +354,5 @@ async fn main() {
 - [crates/config/src/app_config.rs](file:///d:/tdcare/genies/crates/config/src/app_config.rs) - ApplicationConfig 定义
 - [crates/config/src/log_config.rs](file:///d:/tdcare/genies/crates/config/src/log_config.rs) - LogConfig 和 init_log
 - [crates/config/examples/](file:///d:/tdcare/genies/crates/config/examples/) - 配置示例
-- [crates/genies_derive/src/config_core_type.rs](file:///d:/tdcare/genies/crates/genies_derive/src/config_core_type.rs) - ConfigCore 宏实现
+- [crates/genies_derive/src/config_type.rs](file:///d:/tdcare/genies/crates/genies_derive/src/config_type.rs) - Config 宏实现（外部使用）
+- [crates/genies_derive/src/config_core_type.rs](file:///d:/tdcare/genies/crates/genies_derive/src/config_core_type.rs) - ConfigCore 宏实现（框架内部）

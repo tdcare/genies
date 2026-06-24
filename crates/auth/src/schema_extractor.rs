@@ -141,11 +141,9 @@ pub async fn extract_and_sync_schemas(doc: &OpenApi) -> Result<()> {
         return Ok(());
     }
     
-    // 5. 写入数据库 — INSERT ... ON DUPLICATE KEY UPDATE
-    for record in &records {
-        sync_to_db(record).await
-            .map_err(|e| Error::from(format!("同步记录到数据库失败: {}", e)))?;
-    }
+    // 5. 批量写入数据库 — 单条 INSERT ... ON DUPLICATE KEY UPDATE（分批 100 条）
+    sync_batch_to_db(&records).await
+        .map_err(|e| Error::from(format!("批量同步记录到数据库失败: {}", e)))?;
 
     log::info!("已同步 {} 条 Schema 字段记录到数据库", records.len());
     Ok(())
@@ -598,12 +596,80 @@ fn build_schema_endpoint_map<'a>(
 // 数据库同步
 // ============================================================================
 
-/// 将记录同步到数据库
+/// 将多条记录批量同步到数据库（单条 SQL 多 VALUES）
 ///
-/// 使用 INSERT ... ON DUPLICATE KEY UPDATE 实现 UPSERT 语义
-/// - 新记录：插入所有字段
-/// - 已存在：更新 field_type, endpoint_path, http_method, updated_at
-/// - 保留 schema_label, field_label, endpoint_label 的手动设置值
+/// 每批最多 100 条，避免单条 SQL 过长。
+/// 使用 INSERT ... ON DUPLICATE KEY UPDATE 实现 UPSERT 语义，
+/// 264 条记录从 264 次网络往返缩减为 3 次。
+async fn sync_batch_to_db(records: &[SchemaFieldRecord]) -> Result<()> {
+    if records.is_empty() {
+        return Ok(());
+    }
+
+    const BATCH_SIZE: usize = 50;
+
+    for chunk in records.chunks(BATCH_SIZE) {
+        let mut sql = String::from(
+            "INSERT INTO auth_api_schemas \
+                (schema_name, schema_label, schema_description, field_name, field_label, \
+                 field_type, field_description, field_required,\
+                 endpoint_path, endpoint_label, endpoint_description, \
+                 endpoint_tags, endpoint_operation_id, http_method) \
+            VALUES "
+        );
+
+        let mut params: Vec<rbs::Value> = Vec::with_capacity(chunk.len() * 14);
+
+        for (i, record) in chunk.iter().enumerate() {
+            if i > 0 {
+                sql.push_str(", ");
+            }
+            sql.push_str("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+
+            params.push(rbs::to_value(&record.schema_name).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.schema_label).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.schema_description).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.field_name).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.field_label).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.field_type).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.field_description).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.field_required.unwrap_or(false)).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.endpoint_path).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.endpoint_label).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.endpoint_description).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.endpoint_tags).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.endpoint_operation_id).map_err(|e| Error::from(e.to_string()))?);
+            params.push(rbs::to_value(&record.http_method).map_err(|e| Error::from(e.to_string()))?);
+        }
+
+        sql.push_str(
+            " ON DUPLICATE KEY UPDATE \
+                schema_description = COALESCE(VALUES(schema_description), auth_api_schemas.schema_description),\
+                field_type = VALUES(field_type),\
+                field_description = COALESCE(VALUES(field_description), auth_api_schemas.field_description),\
+                field_required = VALUES(field_required),\
+                endpoint_path = VALUES(endpoint_path),\
+                endpoint_label = COALESCE(auth_api_schemas.endpoint_label, VALUES(endpoint_label)),\
+                endpoint_description = COALESCE(VALUES(endpoint_description), auth_api_schemas.endpoint_description),\
+                endpoint_tags = VALUES(endpoint_tags),\
+                endpoint_operation_id = VALUES(endpoint_operation_id),\
+                http_method = VALUES(http_method),\
+                updated_at = NOW()"
+        );
+
+        CONTEXT.rbatis.exec(&sql, params).await
+            .map_err(|e| Error::from(e.to_string()))?;
+
+        log::debug!("已批量同步 {} 条记录（本批 {} 条）", records.len(), chunk.len());
+    }
+
+    Ok(())
+}
+
+/// 将单条记录同步到数据库（已弃用，保留作为回退）
+///
+/// 仅用于特殊场景下的单条 UPSERT，正常同步请使用 [`sync_batch_to_db`]。
+#[allow(dead_code)]
 async fn sync_to_db(record: &SchemaFieldRecord) -> Result<()> {
     let sql = r#"
         INSERT INTO auth_api_schemas 

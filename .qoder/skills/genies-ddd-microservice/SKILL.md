@@ -177,25 +177,46 @@ crud!(DeviceEntity {}, "device");
 
 ### 4.4 域服务
 
-封装跨实体的复杂业务逻辑：
+**域服务是无状态的**，仅负责封装跨多个聚合根的业务规则协调。域服务不管理事务、不直接操作数据库，只做纯业务逻辑判断。
+
+> **关键区分**：域服务协调"业务规则"，应用服务协调"执行流程"。事务管理、数据库操作、事件发布都属于应用服务的职责。
 
 ```rust
-use genies_ddd::DomainEventPublisher::publish;
-use rbatis::executor::Executor;
+/// 域服务 — 无状态，只负责跨聚合根的业务规则
+pub struct OrderDomainService;
 
-pub struct DeviceDomainService;
+impl OrderDomainService {
+    /// 协调多个聚合根的业务规则（不涉及数据库、事务）
+    pub fn validate_order_creation(
+        account: &Account,
+        product: &Product,
+        quantity: u32,
+    ) -> Result<(), String> {
+        // 校验账户状态
+        if account.status != AccountStatus::Active {
+            return Err("账户未激活".to_string());
+        }
+        // 校验余额
+        if account.balance < product.price * quantity as f64 {
+            return Err(format!("余额不足，需要 {:.2}，当前 {:.2}",
+                product.price * quantity as f64, account.balance));
+        }
+        // 校验库存
+        if product.stock < quantity {
+            return Err(format!("库存不足，需要 {}，当前 {}", quantity, product.stock));
+        }
+        Ok(())
+    }
 
-impl DeviceDomainService {
-    /// 复杂业务逻辑：创建设备并发布事件
-    pub async fn create_device(
-        tx: &mut dyn Executor,
-        device: &Device,
-        event: DeviceCreatedEvent,
-    ) {
-        // 保存聚合根
-        DeviceEntity::insert(tx, &device.into()).await.unwrap();
-        // 发布领域事件
-        publish(tx, device, Box::new(event)).await;
+    /// 计算订单总价（跨聚合根的计算逻辑）
+    pub fn calculate_order_total(
+        products: &[(Product, u32)],  // (商品, 数量)
+        discount: &Discount,
+    ) -> f64 {
+        let raw_total: f64 = products.iter()
+            .map(|(p, qty)| p.price * *qty as f64)
+            .sum();
+        discount.apply(raw_total)
     }
 }
 ```
@@ -204,7 +225,7 @@ impl DeviceDomainService {
 
 ### 5.1 应用服务
 
-编排用例、管理事务：
+**应用服务对应一个完整的系统用例**，负责编排整个业务流程：加载聚合根 → 调用域服务校验规则 → 调用聚合根执行业务操作 → 管理事务边界 → 持久化 → 发布事件。事务管理是应用服务的核心职责。
 
 ```rust
 use genies::context::CONTEXT;
@@ -213,24 +234,75 @@ use genies_ddd::DomainEventPublisher::publish;
 pub struct DeviceAppService;
 
 impl DeviceAppService {
-    /// 设备绑定用例
+    /// 设备绑定 — 完整的系统用例
     pub async fn bind_device(serial_number: &str) -> Result<String, String> {
         let rb = &CONTEXT.rbatis;
-        // 查询设备
+
+        // 1. 查询设备
         let device = DeviceEntity::select_by_column(rb, "serial_number", serial_number)
             .await.map_err(|e| e.to_string())?;
         if device.is_empty() {
             return Err("设备不存在".to_string());
         }
-        // 聚合根执行业务方法
+
+        // 2. 聚合根执行业务方法
         let mut agg: Device = device[0].clone().into();
         let event = agg.bind()?;
-        // 持久化 + 事件发布
+
+        // 3. 事务管理：持久化 + 事件发布
         let mut tx = rb.acquire_begin().await.unwrap();
         DeviceEntity::update_by_column(&mut tx, &(&agg).into(), "id").await.unwrap();
         publish(&mut tx, &agg, Box::new(event)).await;
         tx.commit().await.unwrap();
+
         Ok(agg.id)
+    }
+}
+```
+
+#### 跨聚合根用例示例
+
+当用例涉及多个聚合根时，应用服务依次加载各聚合根、调用域服务校验规则，最后在同一事务中完成所有变更：
+
+```rust
+pub struct OrderAppService;
+
+impl OrderAppService {
+    /// 创建订单 — 跨聚合根用例（Account + Product + Order）
+    pub async fn create_order(
+        account_id: &str,
+        items: Vec<(String, u32)>,  // (product_id, quantity)
+    ) -> Result<String, String> {
+        let rb = &CONTEXT.rbatis;
+
+        // 1. 加载聚合根
+        let account_entity = AccountEntity::select_by_column(rb, "id", account_id)
+            .await.map_err(|e| e.to_string())?;
+        let account: Account = account_entity.first().ok_or("账户不存在")?.clone().into();
+
+        let mut products = Vec::new();
+        for (product_id, qty) in &items {
+            let entity = ProductEntity::select_by_column(rb, "id", product_id)
+                .await.map_err(|e| e.to_string())?;
+            let product: Product = entity.first().ok_or("商品不存在")?.clone().into();
+            products.push((product, *qty));
+        }
+
+        // 2. 调用域服务校验跨聚合根规则（无状态，不涉及数据库）
+        for (product, qty) in &products {
+            OrderDomainService::validate_order_creation(&account, product, *qty)?;
+        }
+
+        // 3. 聚合根执行业务操作
+        let (mut order, event) = Order::create(account_id, &products);
+
+        // 4. 在同一事务中持久化所有变更 + 发布事件
+        let mut tx = rb.acquire_begin().await.unwrap();
+        OrderEntity::insert(&mut tx, &(&order).into()).await.unwrap();
+        publish(&mut tx, &order, Box::new(event)).await;
+        tx.commit().await.unwrap();
+
+        Ok(order.id)
     }
 }
 ```
@@ -1025,8 +1097,8 @@ impl DrugAdviceEntity {
 
 - **新项目统一使用雪花 ID（`genies::next_id()`）作为实体/聚合根 ID**。雪花 ID 是 Java `UUID.randomUUID()` 的功能平替，用于生成分布式唯一 ID。在核心库中使用 `genies_core::id_gen::next_id()`。从 Java 迁移时，若已有数据使用 UUID 且雪花 ID 无法兼容，可继续使用 UUID 保持数据兼容性。新功能开发不应引入 `uuid` crate。
 - **聚合根**应包含业务规则验证，工厂方法返回 `(Entity, Event)` 元组
-- **域服务**处理跨实体逻辑，不直接暴露给接口层
-- **应用服务**编排用例，管理事务边界（`acquire_begin` / `commit`）
+- **域服务**是无状态的，仅负责协调跨聚合根的业务规则，不可涉及事务管理和数据库操作
+- **应用服务**对应完整的系统用例，负责加载聚合根 → 调用域服务校验规则 → 管理事务边界（`acquire_begin` / `commit`）→ 持久化 → 发布事件
 - **Handler** 只做参数解析和响应格式化，不含业务逻辑；必须使用 `#[endpoint]` 以生成 OpenAPI 文档
 - **所有请求/响应 DTO 必须 `#[derive(ToSchema)]`** — 确保 OpenAPI Schema 正确注册
 - **所有响应 DTO 必须加 `#[casbin]`** — 实现字段级动态权限过滤（Genies 独有能力）
