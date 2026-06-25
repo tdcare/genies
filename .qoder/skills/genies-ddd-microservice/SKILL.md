@@ -974,8 +974,8 @@ pub async fn on_work_item_executed(
     tx: &mut dyn Executor,
     event: WorkItemExecutedEvent,
 ) -> anyhow::Result<u64> {
-    // 更新血袋状态
-    BloodBagDomainService::handle_work_item_executed(tx, &event).await?;
+    // 通过仓储更新血袋状态
+    BloodBagRepository::update_status_by_work_item(tx, &event).await?;
     Ok(0)
 }
 
@@ -985,43 +985,94 @@ pub async fn on_blood_bag_audited(
     tx: &mut dyn Executor,
     event: BloodBagAuditedEvent,
 ) -> anyhow::Result<u64> {
-    BloodBagDomainService::handle_audited(tx, &event).await?;
+    // 通过仓储处理审核后的血袋
+    BloodBagRepository::handle_audited(tx, &event).await?;
     Ok(0)
 }
 ```
 
 ### 12.5 域服务编排模式
 
-复杂业务领域的域服务应按层次组织，主服务聚合子服务：
+复杂业务领域的域服务应按层次组织，主服务聚合子服务——但**所有 SQL 操作归属 Repository，域服务只做纯业务逻辑**：
 
 ```rust
-/// 主域服务 — 聚合所有医嘱类型的子服务
+// ============ 仓储层：SQL 操作集中管理 ============
+
+pub struct DrugAdviceRepository;
+
+impl DrugAdviceRepository {
+    /// 持久化聚合根 + 发布事件（在一次事务中完成）
+    pub async fn save_and_publish(
+        tx: &mut dyn Executor,
+        advice: &DrugAdvice,
+        event: Box<dyn DomainEvent>,
+    ) -> Result<(), String> {
+        DrugAdviceEntity::insert(tx, &advice.into()).await
+            .map_err(|e| e.to_string())?;
+        publish(tx, advice, event).await;
+        Ok(())
+    }
+}
+
+// ============ 领域层：纯业务规则编排（无状态、无 SQL） ============
+
+/// 主域服务 — 根据类型分派到子服务处理业务规则
 pub struct DoctorAdviceDomainService;
 
 impl DoctorAdviceDomainService {
-    /// 根据类型分派到子服务处理
-    pub async fn create_advice(
-        tx: &mut dyn Executor,
+    /// 校验医嘱创建规则（纯业务逻辑，不涉及数据库/事务）
+    pub fn validate_advice_creation(
         advice_type: DoctorAdviceType,
-        cmd: CreateAdviceCommand,
-    ) -> Result<String, String> {
+        cmd: &CreateAdviceCommand,
+    ) -> Result<(), String> {
         match advice_type {
-            DoctorAdviceType::Drug => DrugAdviceDomainService::create(tx, cmd).await,
-            DoctorAdviceType::Examine => ExamineAdviceDomainService::create(tx, cmd).await,
-            DoctorAdviceType::Operation => OperationAdviceDomainService::create(tx, cmd).await,
+            DoctorAdviceType::Drug => DrugAdviceDomainService::validate(cmd),
+            DoctorAdviceType::Examine => ExamineAdviceDomainService::validate(cmd),
             // ...
         }
     }
 }
 
-/// 子域服务 — 专注于特定医嘱类型的业务逻辑
+/// 子域服务 — 专注于特定医嘱类型的业务规则
 pub struct DrugAdviceDomainService;
 
 impl DrugAdviceDomainService {
-    pub async fn create(tx: &mut dyn Executor, cmd: CreateAdviceCommand) -> Result<String, String> {
-        let (advice, event) = DrugAdvice::create(cmd);
-        DrugAdviceEntity::insert(tx, &(&advice).into()).await.map_err(|e| e.to_string())?;
-        publish(tx, &advice, Box::new(event)).await;
+    /// 校验药物医嘱创建规则（纯业务逻辑）
+    pub fn validate(cmd: &CreateAdviceCommand) -> Result<(), String> {
+        if cmd.dosage <= 0.0 {
+            return Err("剂量必须大于 0".to_string());
+        }
+        // 其他业务规则校验...
+        Ok(())
+    }
+}
+
+// ============ 应用层：编排完整用例 ============
+
+pub struct DoctorAdviceAppService;
+
+impl DoctorAdviceAppService {
+    /// 创建医嘱 — 完整系统用例
+    pub async fn create_advice(
+        advice_type: DoctorAdviceType,
+        cmd: CreateAdviceCommand,
+    ) -> Result<String, String> {
+        let rb = &CONTEXT.rbatis;
+
+        // 1. 调用域服务校验业务规则（无状态，不涉及数据库）
+        DoctorAdviceDomainService::validate_advice_creation(advice_type, &cmd)?;
+
+        // 2. 聚合根执行业务操作
+        let (advice, event) = match advice_type {
+            DoctorAdviceType::Drug => DrugAdvice::create(cmd),
+            // ...
+        };
+
+        // 3. 事务管理：通过仓储持久化 + 发布事件
+        let mut tx = rb.acquire_begin().await.unwrap();
+        DrugAdviceRepository::save_and_publish(&mut tx, &advice, Box::new(event)).await?;
+        tx.commit().await.unwrap();
+
         Ok(advice.id)
     }
 }
