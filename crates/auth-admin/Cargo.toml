@@ -1,0 +1,77 @@
+[package]
+name = "genies_auth_admin"
+version = "1.8.1"
+authors = ["tdcare"]
+edition = "2021"
+license = "MIT"
+description = "统一认证管理服务 - 用户、角色、权限、组织架构管理"
+keywords = ["auth", "admin", "casbin", "dapr"]
+documentation = "https://docs.rs/genies_auth_admin"
+exclude = ["web/node_modules", "web/src", "web/index.html", "web/package.json", "web/package-lock.json", "web/tsconfig.json", "web/vite.config.ts"]
+
+[lib]
+name = "genies_auth_admin"
+path = "src/lib.rs"
+
+[[bin]]
+name = "auth-admin"
+path = "src/main.rs"
+
+[dependencies]
+genies = "1.9.0"
+genies_core = "1.9.0"
+genies_derive = "1.9.0"
+genies_config = "1.9.0"
+genies_context = "1.9.0"
+genies_dapr = "1.9.0"
+genies_ddd = "1.9.0"
+genies_auth = "1.9.0"
+genies_cache = "1.9.0"
+
+serde = { version = "1.0.148", features = ["derive"] }
+serde_json = "1.0.89"
+serde_yaml = "0.9"
+
+log = "0.4.17"
+tracing = "0.1"
+
+tokio = { version = "1.22.0", features = ["full"] }
+async-trait = "0.1.59"
+
+salvo = { version = "0.89", features = ["websocket", "rustls", "oapi", "affix-state"] }
+
+rbatis = { version = "=4.9.2", features = ["debug_mode"] }
+rbs = "=4.8.4"
+rbdc = { version = "=4.9.7", default-features = false }
+rbdc-mysql = "=4.9.2"
+rbdc-pool-fast = "=4.9.4"
+
+bcrypt = "0.15"
+jsonwebtoken = "7.2.0"
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json"] }
+casbin = { version = "2.10.1", features = ["runtime-tokio"] }
+
+# 数据库迁移
+flyway = "0.6.0"
+flyway-rbatis = "0.6.0"
+
+# 静态文件嵌入
+rust-embed = { version = "8" }
+mime_guess = "2"
+
+# 验证码
+captcha = "0.0.9"
+base64 = "0.22"
+uuid = { version = "1", features = ["v4"] }
+
+# 双因素认证
+totp-rs = { version = "5", features = ["gen_secret", "otpauth"] }
+qrcode = "0.14"
+aes-gcm = "0.10"
+rand = "0.8"
+
+# OAuth 2.0
+sha2 = "0.10"
+hex = "0.4"

@@ -1,6 +1,6 @@
 [package]
 name = "genies_test"
-version = "1.8.0"
+version = "1.9.0"
 authors = ["tdcare"]
 edition = "2021"
 license = "MIT/Apache-2.0"

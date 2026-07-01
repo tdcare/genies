@@ -122,6 +122,18 @@ macro_rules! config_gateway {
 mod tests {
 
     #[test]
+    fn test_next_id_length() {
+        genies_core::id_gen::init(1, 1);
+        let id1 = genies_core::id_gen::next_id();
+        let id2 = genies_core::id_gen::next_id();
+        println!("ID1: {} (len={})", id1, id1.len());
+        println!("ID2: {} (len={})", id2, id2.len());
+        assert!(id1.len() >= 13, "ID should be at least 13 digits, got {}", id1.len());
+        assert!(id1.len() <= 15, "ID should be at most 15 digits, got {}", id1.len());
+        assert_ne!(id1, id2, "Consecutive IDs should be unique");
+    }
+
+    #[test]
     fn copy_string() {
         let src1 = "测试字符串".to_string();
         let dest = copy!(&src1, String);

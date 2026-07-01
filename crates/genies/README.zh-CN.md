@@ -198,15 +198,15 @@ let subscriptions = collect_topic_subscriptions();
 `genies` crate 从 `genies_core` 重新导出了雪花 ID 生成器：
 
 ```rust
-/// 生成全局唯一的雪花 ID
-let id = genies::next_id(); // 例如 "7446616570199150889"
+/// 生成全局唯一的雪花 ID（48-bit，13~15 位十进制数字）
+let id = genies::next_id(); // 例如 "4133437931841"
 ```
 
 生成器在 `ApplicationContext` 启动时自动初始化，通过 Redis 注册 worker_id，无需手动配置。
 
 | 函数 | 说明 |
 |------|------|
-| `genies::next_id()` | 返回唯一的 `String` 类型 ID（64 位雪花算法） |
+| `genies::next_id()` | 返回唯一的 `String` 类型 ID（48 位雪花算法） |
 
 ## 集成示例
 

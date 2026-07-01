@@ -200,15 +200,15 @@ let subscriptions = collect_topic_subscriptions();
 The `genies` crate re-exports the Snowflake ID generator from `genies_core`:
 
 ```rust
-/// Generate a globally unique Snowflake ID
-let id = genies::next_id(); // e.g. "7446616570199150889"
+/// Generate a globally unique Snowflake ID (48-bit, 13~15 decimal digits)
+let id = genies::next_id(); // e.g. "4133437931841"
 ```
 
 The generator is automatically initialized during `ApplicationContext` startup with a Redis-registered worker_id. No manual setup required.
 
 | Function | Description |
 |----------|-------------|
-| `genies::next_id()` | Returns a unique `String` ID (64-bit snowflake) |
+| `genies::next_id()` | Returns a unique `String` ID (48-bit snowflake) |
 
 ## Integration Example
 

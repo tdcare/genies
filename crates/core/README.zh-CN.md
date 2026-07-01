@@ -234,8 +234,8 @@ use genies_core::id_gen;
 id_gen::init(1, 1);
 
 // 生成唯一 ID
-let order_id = id_gen::next_id();    // 例如 "7446616570199150889"
-let event_id = id_gen::next_id();    // 例如 "7446616570199150890"
+let order_id = id_gen::next_id();    // 例如 "4133437931841"
+let event_id = id_gen::next_id();    // 例如 "4133437931842"
 ```
 
 ## RespVO 与 ResultDTO 选择指南
