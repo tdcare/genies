@@ -7,7 +7,7 @@ description: Guide for using the Genies Rust microservice framework with DDD and
 
 ## 1. 框架简介
 
-**Genies** 是一个基于 Rust 的 DDD + Dapr 微服务开发框架（v1.4.5），通过宏驱动架构提供声明式的聚合根、领域事件、权限控制和配置管理能力。
+**Genies** 是一个基于 Rust 的 DDD + Dapr 微服务开发框架，通过宏驱动架构提供声明式的聚合根、领域事件、权限控制和配置管理能力。
 
 ### 核心模块
 

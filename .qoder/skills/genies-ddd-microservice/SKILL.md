@@ -410,6 +410,38 @@ DeviceEntity::insert(rb, &entity).await.unwrap();
 - 如果源和目标的 `#[serde(rename_all = "...")]` 不一致（如一个是 camelCase，一个是 snake_case），同名字段将无法匹配。确保两边的 serde 序列化名一致
 - 对于简单的转换场景，手动实现 `From<Source> for Target` 性能更好且更安全；`copy!` 适合字段多、频繁变动的场景
 
+### 5.5 日期时间字段处理
+
+所有 VO/DTO 中的 `rbdc::DateTime` 字段必须序列化为**毫秒时间戳**（与 Java `Long` 一致），通过 `date_format` 模块实现：
+
+```rust
+use crate::model::date_format::{serialize_option_datetime, deserialize_option_datetime};
+
+#[casbin]
+#[derive(Clone, Debug, Serialize, Deserialize, Default, salvo::oapi::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserVO {
+    pub id: Option<String>,
+    pub name: Option<String>,
+    /// 创建时间 — 序列化为毫秒时间戳
+    #[serde(
+        serialize_with = "serialize_option_datetime",
+        deserialize_with = "deserialize_option_datetime"
+    )]
+    pub created_at: Option<rbdc::DateTime>,
+    /// 更新时间 — 序列化为毫秒时间戳
+    #[serde(
+        serialize_with = "serialize_option_datetime",
+        deserialize_with = "deserialize_option_datetime"
+    )]
+    pub updated_at: Option<rbdc::DateTime>,
+}
+```
+
+`date_format` 模块参考实现见 `examples/sickbed/src/model/date_format.rs`。该模块仅影响 serde JSON 序列化/反序列化，不影响 RBatis 的数据库读写。
+
+> **注意**：VO 中日期字段类型必须为 `Option<rbdc::DateTime>`，不可用 `Option<String>`（`.to_string()` 会产生非标准格式）。
+
 ## 6. 接口层 (Interface/API Layer)
 
 ### 6.1 Salvo Endpoint
@@ -1160,6 +1192,9 @@ impl DrugAdviceEntity {
 - 消息表 (`message`) 采用 Outbox 模式，由 Dapr CDC 异步投递
 - 参考现有 `crates/auth/` 作为完整业务模块示范
 - SQL 迁移文件使用 `V<N>__<desc>.sql` 双下划线命名
+- **所有 VO/DTO 必须添加 `#[serde(rename_all = "camelCase")]`** — 确保 JSON 字段为 camelCase，与前端命名一致
+- **日期字段统一使用 `date_format` 模块序列化为毫秒时间戳** — 禁止在 VO 中使用 `Option<String>` + `.to_string()` 转换日期
+- **ID 字段在 VO 层转为 `Option<String>`** — 避免 JavaScript `Number` 精度丢失（雪花 ID 超过 2^53）
 
 ## 14. Related Skills
 
@@ -1172,3 +1207,10 @@ impl DrugAdviceEntity {
 - **auth-usage** — 权限管理（Casbin 中间件、字段级过滤、Admin UI）
 - **context-usage** — 全局上下文（CONTEXT、RBATIS、缓存）
 - **config-usage** — 配置管理（ApplicationConfig、YAML + ENV 加载）
+- **api-conventions** — 前后端接口规范（命名、日期、分页、错误码、ID 策略）
+
+## Related Skills
+
+- **salvo-openapi**: 自动生成 OpenAPI 文档（使用 `#[endpoint]` + `QueryParam` 等提取器）
+- **salvo-routing**: Salvo 路由与 handler 定义
+- **salvo-data-extraction**: 请求数据提取（Path/Query/JsonBody）

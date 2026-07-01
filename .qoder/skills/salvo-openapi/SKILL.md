@@ -73,6 +73,8 @@ async fn get_user(id: PathParam<i64>) -> String {
 
 ### Query Parameters
 
+> **重要**：必须使用 `QueryParam` 提取器，**禁止**使用 `req.query()` 手动解析查询参数。`req.query()` 不会生成 OpenAPI 文档，使用 `QueryParam` 才能自动生成参数说明。
+
 ```rust
 use salvo::oapi::extract::QueryParam;
 
@@ -412,6 +414,7 @@ async fn main() {
 4. **Group endpoints with tags**: Organize API documentation
 5. **Document error responses**: Include all possible status codes
 6. **Use ToParameters for query structs**: Better documentation for complex queries
+7. **Use `QueryParam` instead of `req.query()`**: `QueryParam` extractor automatically generates OpenAPI parameter documentation. `req.query()` manually parses query strings and will NOT appear in the generated OpenAPI spec. Always prefer `QueryParam<T, REQUIRED>` or `ToParameters` structs for query parameters.
 
 ## Related Skills
 
