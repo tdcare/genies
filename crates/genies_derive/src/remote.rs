@@ -33,7 +33,7 @@ pub(crate) fn impl_remote(target_fn: &ItemFn, _args: &AttributeArgs) -> TokenStr
     // to ensure proper resolution in the generated code regardless of user imports.
     let mut feign_http_attr = attrs[feign_http_attr_idx].clone();
     let feignhttp_segment = syn::PathSegment {
-        ident: Ident::new("feignhttp", Span::call_site()),
+        ident: Ident::new("feignhttp_rs", Span::call_site()),
         arguments: syn::PathArguments::None,
     };
     feign_http_attr.path.segments.insert(0, feignhttp_segment);

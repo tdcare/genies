@@ -1,0 +1,46 @@
+[package]
+name = "sickbed"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+
+[[bin]]
+name = "sickbed"
+path = "src/main.rs"
+
+[dependencies]
+genies = { workspace = true }
+genies_derive = { workspace = true }
+genies_core = { workspace = true }
+genies_ddd = { workspace = true }
+genies_cache = { workspace = true }
+rbatis = { workspace = true }
+rbs = { workspace = true }
+rbdc = { workspace = true }
+rbdc-mysql = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+log = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+salvo = { workspace = true }
+genies_auth = { workspace = true }
+casbin = { version = "2.10.1", features = ["runtime-tokio"] }
+chrono = "0.4"
+feignhttp-rs = { workspace = true }
+once_cell = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
+flyway = "0.5.0"
+flyway-rbatis = "0.5.0"
+
+[dev-dependencies]
+reqwest = { version = "0.12", features = ["json"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+rbatis = { workspace = true }
+rbdc-mysql = { workspace = true }
+rbs = { workspace = true }
+once_cell = { workspace = true }
+genies_test = { path = "../../crates/test" }
