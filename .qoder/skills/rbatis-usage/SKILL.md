@@ -146,6 +146,7 @@ use rbatis::py_sql;
 use rbatis::executor::Executor;
 use rbatis::rbdc::ExecResult;
 
+// --- SELECT: 返回 Vec<T> ---
 #[py_sql(
     "`select * from activity where delete_flag = 0`
       if name != '':
@@ -158,12 +159,40 @@ async fn py_select(rb: &dyn Executor, name: &str, ids: &[i32]) -> rbatis::Result
     impled!()
 }
 
-// Functional macro form (alternative):
+// --- DELETE / UPDATE: 返回 ExecResult ---
+#[py_sql(
+    "`delete from activity where delete_flag = 0`
+      if name != '':
+        ` and name = #{name}`
+      if !ids.is_empty():
+        ` and id in `
+        ${ids.sql()}"
+)]
+async fn py_delete(rb: &dyn Executor, name: &str, ids: &[i32]) -> Result<ExecResult, rbatis::Error> {
+    impled!()
+}
+
+// --- 函数式宏 pysql! (SELECT) ---
 rbatis::pysql!(py_select2(rb: &dyn Executor, name: &str) -> Result<Vec<Activity>, rbatis::Error> =>
     "`select * from activity`
       if name != '':
         ` and name = #{name}`");
+
+// --- 函数式宏 pysql! (DELETE / UPDATE) ---
+rbatis::pysql!(py_delete2(rb: &dyn Executor, name: &str, ids: &[i32]) -> Result<ExecResult, rbatis::Error> =>
+    "`delete from activity where delete_flag = 0`
+      if name != '':
+        ` and name = #{name}`
+      if !ids.is_empty():
+        ` and id in `
+        ${ids.sql()}");
 ```
+
+**返回值规则**：
+- **SELECT** 查询 → 返回 `Result<Vec<T>, Error>`（T 为表模型）
+- **INSERT / UPDATE / DELETE** 操作 → 返回 `Result<ExecResult, Error>`
+  - `ExecResult.rows_affected` — 受影响行数
+  - `ExecResult.last_insert_id` — 最后插入的 ID（仅 INSERT）
 
 **Placeholder rules**:
 - `#{arg}` — precompiled parameter (safe, prevents SQL injection)
