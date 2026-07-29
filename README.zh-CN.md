@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/tdcare/genies"><img src="https://img.shields.io/badge/version-1.6.0-blue.svg" alt="version"></a>
+  <a href="https://github.com/tdcare/genies"><img src="https://img.shields.io/badge/version-1.9.0-blue.svg" alt="version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-edition%202021-orange.svg" alt="rust"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="license"></a>
 </p>
@@ -31,7 +31,7 @@
 
 ## 项目简介
 
-**Genies (神灯)** 是一个专为 Rust 生态设计的微服务开发框架（v1.6.0），它将 **DDD（领域驱动设计）** 理念与 **Dapr 微服务运行时** 深度整合，同时保持与基于 **Eventuate** 的 Java 项目的兼容性。
+**Genies (神灯)** 是一个专为 Rust 生态设计的微服务开发框架（v1.9.0），它将 **DDD（领域驱动设计）** 理念与 **Dapr 微服务运行时** 深度整合，同时保持与基于 **Eventuate** 的 Java 项目的兼容性。
 
 框架通过 **宏驱动架构** 提供声明式的聚合根、领域事件、权限控制和配置管理能力，让开发者能够以最小的样板代码构建企业级微服务应用。
 
@@ -41,7 +41,7 @@
 |------|------|------|
 | **Rust** | Edition 2021 | 编程语言 |
 | **Salvo** | 0.89 | Web 框架 |
-| **RBatis** | 4.8 | ORM 框架 |
+| **RBatis** | 4.9 | ORM 框架 |
 | **Tokio** | 1.22 | 异步运行时 |
 | **Casbin** | 2.10 | 权限引擎 |
 | **Redis** | - | 缓存服务 |
@@ -66,6 +66,7 @@
 - **灵活配置管理** - 使用 `#[derive(Config)]` 支持 YAML 配置文件和环境变量覆盖
 - **双后端缓存** - 支持 Redis 和内存两种缓存后端，可通过配置切换
 - **JWT 认证中间件** - 内置 Keycloak 集成的 JWT 验证
+- **双模式认证** - 支持 Keycloak SSO 和 local JWT 两种认证模式，通过 `auth_mode` 配置切换
 - **K8s 健康检查** - 开箱即用的存活/就绪探针
 - **HTTP 包装器** - `#[remote]` 宏自动处理跨微服务调用的 Token 刷新
 
@@ -131,7 +132,7 @@ async fn main() {
     Server::new(acceptor).serve(router).await;
 }
 
-#[handler]
+#[endpoint]
 async fn hello() -> &'static str {
     "Hello, Genies!"
 }
@@ -176,9 +177,13 @@ genies/
 │   ├── dapr/               # genies_dapr - Dapr 集成
 │   ├── ddd/                # genies_ddd - DDD 核心
 │   ├── k8s/                # genies_k8s - K8s 健康检查
-│   └── auth/               # genies_auth - 权限示例
+│   ├── auth/               # genies_auth - 权限与认证中间件
+│   ├── auth-admin/         # genies_auth_admin - 统一认证管理后台（独立服务）
+│   └── test/               # genies_test - 测试工具
 └── examples/
-    └── topic/              # 事件订阅示例
+    ├── topic/              # 事件订阅示例
+    ├── sickbed/            # 完整 DDD 微服务示例
+    └── integration/        # 集成测试示例
 ```
 
 ### Crate 依赖关系
@@ -214,15 +219,18 @@ genies/
 
 | Crate | 职责 |
 |-------|------|
-| **genies** | 主框架聚合入口，重导出所有子 crate，提供便捷宏 `pool!`、`tx_defer!`、`copy!` |
-| **genies_core** | 核心基础设施：错误处理、JWT 验证、HTTP 响应模型（`RespVO`、`ResultDTO`） |
+| **genies** | 主框架聚合入口，重导出所有子 crate，提供便捷宏 `pool!`、`tx_defer!`、`copy!`、`next_id` |
+| **genies_core** | 核心基础设施：错误处理、JWT 验证、HTTP 响应模型（`RespVO`、`ResultDTO`）、雪花 ID 生成器 |
 | **genies_derive** | 过程宏库：`DomainEvent`、`Aggregate`、`Config`、`topic`、`remote`、`casbin` |
 | **genies_config** | 配置管理：`ApplicationConfig`、日志配置，支持 YAML + 环境变量 |
 | **genies_context** | 全局上下文（`CONTEXT`）、JWT 认证中间件、服务状态管理 |
 | **genies_cache** | 缓存抽象层：`CacheService` 支持 Redis 和内存双后端 |
-| **genies_dapr** | Dapr 集成：CloudEvent、发布/订阅、Topic 注册 |
+| **genies_dapr** | Dapr 集成：CloudEvent、发布/订阅、Topic 注册、事件路由自动收集 |
 | **genies_ddd** | DDD 核心：聚合根 Trait、领域事件 Trait、消息发布器 |
 | **genies_k8s** | Kubernetes 探针：`/actuator/health/liveness` 和 `/actuator/health/readiness` |
+| **genies_auth** | 权限与认证中间件：Casbin 执行器、JWT 双模式验证（local/keycloak）、字段级过滤、OpenAPI Schema 同步、OAuth2 |
+| **genies_auth_admin** | 统一认证管理后台（独立二进制）：用户/角色/权限/部门/应用/实例 CRUD、JWT 签发、Admin UI |
+| **genies_test** | 测试工具：Java/Rust API 对比测试、数据库快照/差异/恢复 |
 
 ---
 
@@ -415,19 +423,26 @@ pub async fn on_order_created(
 
 #### 注册事件消费者
 
-```rust
-use genies::dapr::dapr_sub::dapr_sub;
-use crate::listeners::{on_order_created_hoop, on_order_shipped_hoop};
+事件消费者路由由 `#[topic]` 宏**自动收集**，无需手动注册：
 
-pub fn event_consumer_router() -> Router {
-    Router::new().push(
-        Router::with_path("/daprsub/consumers")
-            .hoop(on_order_created_hoop)    // 事件处理器中间件
-            .hoop(on_order_shipped_hoop)
-            .post(dapr_sub)                  // Dapr 响应处理
-    )
-}
+```rust
+use genies::{dapr_event_router, dapr_subscribe_handler};
+
+// 在 main() 中添加 Dapr 事件路由：
+let router = Router::new()
+    .push(business_routes())
+    .push(dapr_event_router())       // 自动收集所有 #[topic] handler 路由
+    .push(dapr_subscribe_handler()); // Dapr 订阅发现端点
 ```
+
+**可用的重导出函数：**
+
+| 函数 | 用途 |
+|------|------|
+| `genies::dapr_event_router()` | 自动收集的 topic handler 路由 |
+| `genies::collect_topic_routers()` | 收集 topic 路由为 `Vec<Router>` |
+| `genies::collect_topic_subscriptions()` | 收集 Dapr 订阅配置 |
+| `genies::dapr_subscribe_handler()` | Dapr 订阅发现端点 |
 
 ---
 
@@ -483,15 +498,15 @@ impl MyAppConfig {
 
 ### 5. 字段级权限控制 (`#[casbin]` 宏)
 
-基于 Casbin 实现动态字段级别的访问控制：
+基于 Casbin 实现动态字段级别的访问控制。`#[casbin]` 宏使用 **Salvo Writer** 在响应序列化层进行字段过滤，无需自定义 `Serialize` 实现：
 
 ```rust
 use genies_derive::casbin;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use salvo::oapi::ToSchema;
 
 #[casbin]                           // 必须放在最前面
-#[derive(Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct UserProfile {
     pub id: u64,
     pub name: String,
@@ -499,29 +514,24 @@ pub struct UserProfile {
     pub phone: String,
     pub credit_card: String,
 }
+```
 
-// 在 Handler 中使用
-#[endpoint]
-async fn get_user_profile(
-    req: &mut Request,
-    depot: &mut Depot
-) -> Json<UserProfile> {
-    let enforcer = depot.obtain::<Arc<Enforcer>>().unwrap();
-    let current_user = req.query::<String>("user").unwrap_or("guest".into());
-    
-    let profile = UserProfile {
-        id: 1,
-        name: "张三".to_string(),
-        email: "zhangsan@example.com".to_string(),
-        phone: "13800138000".to_string(),
-        credit_card: "1234-5678-9012-3456".to_string(),
-        enforcer: None,   // 宏自动添加的字段
-        subject: None,    // 宏自动添加的字段
-    };
-    
-    // 应用权限策略
-    Json(profile.with_policy(Arc::clone(&enforcer), current_user))
-}
+**工作原理：**
+
+1. `casbin_auth()` 中间件将 Casbin `Enforcer` 和 `subject` 注入到 Salvo `Depot`
+2. 当 Handler 返回 `#[casbin]` VO 时，其 Writer 实现自动从 `Depot` 提取 enforcer/subject
+3. 对每个字段检查 `(subject, "StructName.field_name", "read")` 是否匹配 Casbin 策略
+4. 被拒绝的字段不会出现在 JSON 输出中
+
+**必需的路由配置：**
+
+```rust
+use genies_auth::casbin_auth;
+
+// casbin_auth 中间件必须挂载在返回 #[casbin] VO 的路由上
+let router = Router::with_path("users")
+    .hoop(casbin_auth())       // 注入 enforcer + subject 到 Depot
+    .push(Router::with_path("{id}").get(get_user_profile));
 ```
 
 **`#[casbin]` 宏自动生成：**
@@ -529,7 +539,7 @@ async fn get_user_profile(
 1. `enforcer` 和 `subject` 字段（标记为 `#[serde(skip)]`）
 2. `with_policy(enforcer, subject)` 方法
 3. `check_permission(field)` 方法
-4. 自定义 `Serialize` 实现（根据权限过滤字段）
+4. Salvo `Writer` 实现（在响应时根据 Casbin 策略过滤字段）
 
 ---
 
@@ -594,11 +604,14 @@ redis_url: "redis://:password@localhost:6379"
 
 ```rust
 use genies_derive::remote;
-use feignhttp::get;
+use once_cell::sync::Lazy;
+
+// 使用 config_gateway! 宏定义服务基础 URL
+pub static UserService: Lazy<String> = genies::config_gateway!("/user-service");
 
 #[remote]
-#[get("${gateway}/user-service/api/users/{id}")]
-pub async fn get_user_by_id(#[path] id: i64) -> feignhttp::Result<User> {}
+#[get(url = UserService, path = "/api/users/{id}")]
+pub async fn get_user_by_id(#[path] id: i64) -> feignhttp::Result<User> { impled!() }
 
 // 使用时无需手动传递 Authorization header
 async fn example() {
@@ -610,7 +623,8 @@ async fn example() {
 
 1. 自动从 `REMOTE_TOKEN` 获取访问令牌
 2. 当遇到 401 错误时，自动刷新令牌并重试
-3. 与 feignhttp 宏无缝配合
+3. 支持 Keycloak 和 local JWT 双模式令牌（基于 `auth_mode` 配置）
+4. 与 feignhttp 宏无缝配合
 
 ---
 
@@ -645,6 +659,44 @@ fn set_not_ready() {
 
 ---
 
+### 9. 认证中间件
+
+Genies 支持两种认证模式，通过 `application.yml` 中的 `auth_mode` 配置：
+
+| 模式 | 说明 |
+|------|------|
+| `keycloak` | Keycloak SSO — 向 Keycloak 服务器验证 Token |
+| `local` | 本地 JWT — 使用 `jwt_secret` 签发/验证 Token（由 auth-admin 签发） |
+
+**可用中间件：**
+
+| 中间件 | 用途 |
+|--------|------|
+| `local_auth` | 仅 JWT 验证（不检查权限） |
+| `combined_auth` | JWT 验证 + Casbin 权限校验 |
+| `oauth2_auth` | OAuth 2.0 资源服务器 Token 验证 |
+| `combined_oauth2_auth` | OAuth 2.0 + Casbin 权限校验 |
+| `casbin_auth` | Casbin API 级访问控制（需要上游已完成 JWT 验证） |
+
+**登录由独立的 auth-admin 服务统一提供。** 业务微服务只负责验证 Token。
+
+```rust
+use std::sync::Arc;
+use genies_auth::{EnforcerManager, LocalAuthConfig, combined_auth};
+
+// 在 main() 中：
+let auth_config = Arc::new(LocalAuthConfig::new(&CONTEXT.config.jwt_secret));
+let mgr = Arc::new(EnforcerManager::new().await.unwrap());
+
+let router = Router::new()
+    .hoop(affix_state::inject(auth_config.clone()))
+    .hoop(affix_state::inject(mgr.clone()))
+    .hoop(combined_auth)    // JWT + Casbin 组合认证
+    .push(business_routes());
+```
+
+---
+
 ## 配置参考
 
 ### ApplicationConfig 完整配置项
@@ -667,10 +719,17 @@ fn set_not_ready() {
 | `log_level` | String | 日志级别 | `"debug,sqlx=warn"` |
 | `white_list_api` | Vec<String> | 免认证白名单 | `["/health/*"]` |
 | `cache_type` | String | 缓存类型 | `"redis"` 或 `"mem"` |
-| `keycloak_auth_server_url` | String | Keycloak 服务地址 | `"http://keycloak/auth/"` |
-| `keycloak_realm` | String | Keycloak Realm | `"myrealm"` |
-| `keycloak_resource` | String | Keycloak Client ID | `"myclient"` |
-| `keycloak_credentials_secret` | String | Keycloak Client Secret | `"xxx-xxx-xxx"` |
+| `auth_mode` | String | 认证模式：`"keycloak"` 或 `"local"` | `"keycloak"` |
+| `jwt_secret` | String | JWT 签名密钥（`local` 模式必填） | `""` |
+| `jwt_expires_in_secs` | u64 | JWT Token 过期时间（秒） | `7200` |
+| `two_fa_encryption_key` | String | 2FA TOTP 加密密钥（32 字节 hex） | 自动生成 |
+| `auth_admin_url` | String | auth-admin 服务地址 | `""` |
+| `keycloak_auth_server_url` | Option\<String\> | Keycloak 服务器地址（仅 keycloak 模式） | `None` |
+| `keycloak_realm` | Option\<String\> | Keycloak Realm（仅 keycloak 模式） | `None` |
+| `keycloak_resource` | Option\<String\> | Keycloak Client ID（仅 keycloak 模式） | `None` |
+| `keycloak_credentials_secret` | Option\<String\> | Keycloak Client Secret（仅 keycloak 模式） | `None` |
+| `machine_id` | Option\<i64\> | 雪花算法机器 ID | 自动获取 |
+| `heartbeat_interval` | u64 | 实例心跳间隔（秒） | `30` |
 | `dapr_pubsub_name` | String | Dapr PubSub 组件名 | `"messagebus"` |
 | `dapr_pub_message_limit` | i64 | 每次发布消息数量限制 | `50` |
 | `dapr_cdc_message_period` | i64 | CDC 消息轮询周期(毫秒) | `5000` |
@@ -705,11 +764,17 @@ max_lifetime: 1800
 # 日志配置
 log_level: "debug,sqlx=warn,hyper=info"
 
-# Keycloak 认证配置
-keycloak_auth_server_url: "http://keycloak:8080/auth/"
-keycloak_realm: "myrealm"
-keycloak_resource: "order-service"
-keycloak_credentials_secret: "your-client-secret"
+# 认证配置
+auth_mode: "local"              # "keycloak" 或 "local"
+jwt_secret: "your-jwt-secret"   # local 模式必填
+jwt_expires_in_secs: 7200       # Token 过期时间（2 小时）
+auth_admin_url: "http://localhost:6116"
+
+# Keycloak 配置（仅 auth_mode = "keycloak" 时需要）
+# keycloak_auth_server_url: "http://keycloak:8080/auth/"
+# keycloak_realm: "myrealm"
+# keycloak_resource: "order-service"
+# keycloak_credentials_secret: "your-client-secret"
 
 # Dapr 配置
 dapr_pubsub_name: "messagebus"
@@ -805,11 +870,11 @@ g2, genies_auth.vo.User.phone, data_group
 
 ### 字段级权限工作原理
 
-1. `#[casbin]` 宏修改结构体，添加 `enforcer` 和 `subject` 字段
-2. 自定义 `Serialize` 实现在序列化每个字段前调用 `check_permission`
-3. `check_permission` 构造请求 `(subject, "StructName.field_name", "read")`
-4. Casbin Enforcer 根据策略决定是否序列化该字段
-5. 被拒绝的字段不会出现在 JSON 输出中
+1. `casbin_auth()` 中间件将 Casbin Enforcer 和当前 subject 注入到 Salvo `Depot`
+2. 当 Handler 返回 `#[casbin]` VO 时，其 Writer 实现自动运行
+3. 对每个字段检查 `(subject, "StructName.field_name", "read")` 是否匹配 Casbin 策略
+4. 被拒绝的字段不会出现在 JSON 响应中
+5. 无需自定义 `Serialize` 实现 — 过滤在 Writer 层完成
 
 ---
 

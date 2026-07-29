@@ -7,7 +7,7 @@ English | [简体中文](README.zh-CN.md)
 </p>
 
 <p align="center">
-  <a href="https://github.com/tdcare/genies"><img src="https://img.shields.io/badge/version-1.6.0-blue.svg" alt="version"></a>
+  <a href="https://github.com/tdcare/genies"><img src="https://img.shields.io/badge/version-1.9.0-blue.svg" alt="version"></a>
   <a href="https://www.rust-lang.org/"><img src="https://img.shields.io/badge/rust-edition%202021-orange.svg" alt="rust"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="license"></a>
 </p>
@@ -31,7 +31,7 @@ English | [简体中文](README.zh-CN.md)
 
 ## Introduction
 
-**Genies (神灯)** is a microservice development framework (v1.6.0) designed specifically for the Rust ecosystem. It deeply integrates **DDD (Domain-Driven Design)** principles with the **Dapr microservice runtime**, while maintaining compatibility with **Eventuate**-based Java projects.
+**Genies (神灯)** is a microservice development framework (v1.9.0) designed specifically for the Rust ecosystem. It deeply integrates **DDD (Domain-Driven Design)** principles with the **Dapr microservice runtime**, while maintaining compatibility with **Eventuate**-based Java projects.
 
 The framework provides declarative aggregate roots, domain events, permission control, and configuration management through a **macro-driven architecture**, enabling developers to build enterprise-grade microservice applications with minimal boilerplate code.
 
@@ -41,7 +41,7 @@ The framework provides declarative aggregate roots, domain events, permission co
 |-----------|---------|---------|
 | **Rust** | Edition 2021 | Programming language |
 | **Salvo** | 0.89 | Web framework |
-| **RBatis** | 4.8 | ORM framework |
+| **RBatis** | 4.9 | ORM framework |
 | **Tokio** | 1.22 | Async runtime |
 | **Casbin** | 2.10 | Permission engine |
 | **Redis** | - | Cache service |
@@ -66,6 +66,7 @@ The framework provides declarative aggregate roots, domain events, permission co
 - **Flexible Configuration** - Support YAML config files and environment variable overrides with `#[derive(Config)]`
 - **Dual-Backend Cache** - Support both Redis and in-memory cache backends, switchable via configuration
 - **JWT Auth Middleware** - Built-in JWT validation with Keycloak integration
+- **Dual-Mode Authentication** - Support both Keycloak SSO and local JWT modes, configurable via `auth_mode`
 - **K8s Health Checks** - Out-of-the-box liveness/readiness probes
 - **HTTP Wrapper** - `#[remote]` macro for automatic token refresh in cross-service calls
 
@@ -131,7 +132,7 @@ async fn main() {
     Server::new(acceptor).serve(router).await;
 }
 
-#[handler]
+#[endpoint]
 async fn hello() -> &'static str {
     "Hello, Genies!"
 }
@@ -176,9 +177,13 @@ genies/
 │   ├── dapr/               # genies_dapr - Dapr integration
 │   ├── ddd/                # genies_ddd - DDD core
 │   ├── k8s/                # genies_k8s - K8s health checks
-│   └── auth/               # genies_auth - Permission example
+│   ├── auth/               # genies_auth - Permission & auth middleware
+│   ├── auth-admin/         # genies_auth_admin - Auth admin backend (standalone service)
+│   └── test/               # genies_test - Testing utilities
 └── examples/
-    └── topic/              # Event subscription example
+    ├── topic/              # Event subscription example
+    ├── sickbed/            # Full DDD microservice example
+    └── integration/        # Integration test example
 ```
 
 ### Crate Dependency Graph
@@ -214,15 +219,18 @@ genies/
 
 | Crate | Responsibility |
 |-------|----------------|
-| **genies** | Main framework aggregation entry; re-exports all sub-crates; provides convenience macros `pool!`, `tx_defer!`, `copy!` |
-| **genies_core** | Core infrastructure: error handling, JWT validation, HTTP response models (`RespVO`, `ResultDTO`) |
+| **genies** | Main framework aggregation entry; re-exports all sub-crates; provides convenience macros `pool!`, `tx_defer!`, `copy!`, `next_id` |
+| **genies_core** | Core infrastructure: error handling, JWT validation, HTTP response models (`RespVO`, `ResultDTO`), snowflake ID generator |
 | **genies_derive** | Procedural macro library: `DomainEvent`, `Aggregate`, `Config`, `topic`, `remote`, `casbin` |
 | **genies_config** | Configuration management: `ApplicationConfig`, log configuration; supports YAML + environment variables |
 | **genies_context** | Global context (`CONTEXT`), JWT auth middleware, service state management |
 | **genies_cache** | Cache abstraction layer: `CacheService` supporting both Redis and in-memory backends |
-| **genies_dapr** | Dapr integration: CloudEvent, pub/sub, topic registration |
+| **genies_dapr** | Dapr integration: CloudEvent, pub/sub, topic registration, event router auto-collection |
 | **genies_ddd** | DDD core: aggregate root traits, domain event traits, message publisher |
 | **genies_k8s** | Kubernetes probes: `/actuator/health/liveness` and `/actuator/health/readiness` |
+| **genies_auth** | Permission & auth middleware: Casbin enforcement, JWT dual-mode (local/keycloak), field-level filtering, OpenAPI Schema sync, OAuth2 |
+| **genies_auth_admin** | Auth admin backend (standalone binary): user/role/permission/department/application/instance CRUD, JWT signing, Admin UI |
+| **genies_test** | Testing utilities: Java/Rust API comparison tests, database snapshot/diff/restore |
 
 ---
 
@@ -415,19 +423,26 @@ The `#[topic]` macro automatically generates:
 
 #### Registering Event Consumers
 
-```rust
-use genies::dapr::dapr_sub::dapr_sub;
-use crate::listeners::{on_order_created_hoop, on_order_shipped_hoop};
+Event consumer routes are **automatically collected** by the `#[topic]` macro. No manual route registration is needed:
 
-pub fn event_consumer_router() -> Router {
-    Router::new().push(
-        Router::with_path("/daprsub/consumers")
-            .hoop(on_order_created_hoop)    // Event handler middleware
-            .hoop(on_order_shipped_hoop)
-            .post(dapr_sub)                  // Dapr response handler
-    )
-}
+```rust
+use genies::{dapr_event_router, dapr_subscribe_handler};
+
+// In main(), add Dapr event routes:
+let router = Router::new()
+    .push(business_routes())
+    .push(dapr_event_router())       // Auto-collects all #[topic] handler routes
+    .push(dapr_subscribe_handler()); // Dapr subscription discovery endpoint
 ```
+
+**Available re-exports:**
+
+| Function | Purpose |
+|----------|---------|
+| `genies::dapr_event_router()` | Auto-collected topic handler routes |
+| `genies::collect_topic_routers()` | Collect topic routers as `Vec<Router>` |
+| `genies::collect_topic_subscriptions()` | Collect Dapr subscription configs |
+| `genies::dapr_subscribe_handler()` | Dapr subscription discovery endpoint |
 
 ---
 
@@ -483,15 +498,15 @@ impl MyAppConfig {
 
 ### 5. Field-Level Access Control (`#[casbin]` Macro)
 
-Dynamic field-level access control powered by Casbin:
+Dynamic field-level access control powered by Casbin. The `#[casbin]` macro uses a **Salvo Writer** to filter fields at the response serialization layer — no custom `Serialize` implementation is needed:
 
 ```rust
 use genies_derive::casbin;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use salvo::oapi::ToSchema;
 
 #[casbin]                           // Must be placed first
-#[derive(Deserialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct UserProfile {
     pub id: u64,
     pub name: String,
@@ -499,29 +514,24 @@ pub struct UserProfile {
     pub phone: String,
     pub credit_card: String,
 }
+```
 
-// Usage in a handler
-#[endpoint]
-async fn get_user_profile(
-    req: &mut Request,
-    depot: &mut Depot
-) -> Json<UserProfile> {
-    let enforcer = depot.obtain::<Arc<Enforcer>>().unwrap();
-    let current_user = req.query::<String>("user").unwrap_or("guest".into());
-    
-    let profile = UserProfile {
-        id: 1,
-        name: "Zhang San".to_string(),
-        email: "zhangsan@example.com".to_string(),
-        phone: "13800138000".to_string(),
-        credit_card: "1234-5678-9012-3456".to_string(),
-        enforcer: None,   // Field auto-added by the macro
-        subject: None,    // Field auto-added by the macro
-    };
-    
-    // Apply permission policies
-    Json(profile.with_policy(Arc::clone(&enforcer), current_user))
-}
+**How it works:**
+
+1. The `casbin_auth()` middleware injects the Casbin `Enforcer` and `subject` into the Salvo `Depot`
+2. When the handler returns a `#[casbin]` VO, its Writer implementation automatically extracts the enforcer/subject from `Depot`
+3. For each field, it checks `(subject, "StructName.field_name", "read")` against Casbin policies
+4. Denied fields are omitted from the JSON output
+
+**Required route setup:**
+
+```rust
+use genies_auth::casbin_auth;
+
+// The casbin_auth middleware must be applied to routes that return #[casbin] VOs
+let router = Router::with_path("users")
+    .hoop(casbin_auth())       // Injects enforcer + subject into Depot
+    .push(Router::with_path("{id}").get(get_user_profile));
 ```
 
 **`#[casbin]` Macro Auto-Generates:**
@@ -529,7 +539,7 @@ async fn get_user_profile(
 1. `enforcer` and `subject` fields (marked with `#[serde(skip)]`)
 2. `with_policy(enforcer, subject)` method
 3. `check_permission(field)` method
-4. Custom `Serialize` implementation (filters fields based on permissions)
+4. Salvo `Writer` implementation (filters fields based on Casbin policies at response time)
 
 ---
 
@@ -594,11 +604,14 @@ Wraps cross-service HTTP calls with automatic token refresh:
 
 ```rust
 use genies_derive::remote;
-use feignhttp::get;
+use once_cell::sync::Lazy;
+
+// Define service base URL using config_gateway! macro
+pub static UserService: Lazy<String> = genies::config_gateway!("/user-service");
 
 #[remote]
-#[get("${gateway}/user-service/api/users/{id}")]
-pub async fn get_user_by_id(#[path] id: i64) -> feignhttp::Result<User> {}
+#[get(url = UserService, path = "/api/users/{id}")]
+pub async fn get_user_by_id(#[path] id: i64) -> feignhttp::Result<User> { impled!() }
 
 // No need to manually pass the Authorization header
 async fn example() {
@@ -610,7 +623,8 @@ async fn example() {
 
 1. Automatically retrieves the access token from `REMOTE_TOKEN`
 2. Automatically refreshes the token and retries on 401 errors
-3. Seamlessly integrates with feignhttp macros
+3. Supports both Keycloak and local JWT token modes (based on `auth_mode` config)
+4. Seamlessly integrates with feignhttp macros
 
 ---
 
@@ -645,6 +659,44 @@ fn set_not_ready() {
 
 ---
 
+### 9. Authentication Middleware
+
+Genies supports two authentication modes, configurable via `auth_mode` in `application.yml`:
+
+| Mode | Description |
+|------|-------------|
+| `keycloak` | Keycloak SSO — validates tokens against Keycloak server |
+| `local` | Local JWT — tokens signed/verified with `jwt_secret` (issued by auth-admin) |
+
+**Available middleware:**
+
+| Middleware | Purpose |
+|------------|---------|
+| `local_auth` | JWT verification only (no permission check) |
+| `combined_auth` | JWT verification + Casbin permission enforcement |
+| `oauth2_auth` | OAuth 2.0 resource server token validation |
+| `combined_oauth2_auth` | OAuth 2.0 + Casbin permission enforcement |
+| `casbin_auth` | Casbin API-level access control (requires JWT already verified upstream) |
+
+**Login is handled by the standalone auth-admin service.** Business microservices only verify tokens.
+
+```rust
+use std::sync::Arc;
+use genies_auth::{EnforcerManager, LocalAuthConfig, combined_auth};
+
+// In main():
+let auth_config = Arc::new(LocalAuthConfig::new(&CONTEXT.config.jwt_secret));
+let mgr = Arc::new(EnforcerManager::new().await.unwrap());
+
+let router = Router::new()
+    .hoop(affix_state::inject(auth_config.clone()))
+    .hoop(affix_state::inject(mgr.clone()))
+    .hoop(combined_auth)    // JWT + Casbin combined
+    .push(business_routes());
+```
+
+---
+
 ## Configuration Reference
 
 ### ApplicationConfig Full Reference
@@ -667,10 +719,17 @@ fn set_not_ready() {
 | `log_level` | String | Log level | `"debug,sqlx=warn"` |
 | `white_list_api` | Vec<String> | Auth-exempt whitelist | `["/health/*"]` |
 | `cache_type` | String | Cache type | `"redis"` or `"mem"` |
-| `keycloak_auth_server_url` | String | Keycloak server URL | `"http://keycloak/auth/"` |
-| `keycloak_realm` | String | Keycloak realm | `"myrealm"` |
-| `keycloak_resource` | String | Keycloak client ID | `"myclient"` |
-| `keycloak_credentials_secret` | String | Keycloak client secret | `"xxx-xxx-xxx"` |
+| `auth_mode` | String | Authentication mode: `"keycloak"` or `"local"` | `"keycloak"` |
+| `jwt_secret` | String | JWT signing secret (required for `local` mode) | `""` |
+| `jwt_expires_in_secs` | u64 | JWT token expiration in seconds | `7200` |
+| `two_fa_encryption_key` | String | 2FA TOTP encryption key (32-byte hex) | Auto-generated |
+| `auth_admin_url` | String | Auth-admin service URL for internal calls | `""` |
+| `keycloak_auth_server_url` | Option\<String\> | Keycloak server URL (keycloak mode only) | `None` |
+| `keycloak_realm` | Option\<String\> | Keycloak realm (keycloak mode only) | `None` |
+| `keycloak_resource` | Option\<String\> | Keycloak client ID (keycloak mode only) | `None` |
+| `keycloak_credentials_secret` | Option\<String\> | Keycloak client secret (keycloak mode only) | `None` |
+| `machine_id` | Option\<i64\> | Snowflake ID machine ID | Auto-detected |
+| `heartbeat_interval` | u64 | Instance heartbeat interval (seconds) | `30` |
 | `dapr_pubsub_name` | String | Dapr PubSub component name | `"messagebus"` |
 | `dapr_pub_message_limit` | i64 | Message publish batch limit | `50` |
 | `dapr_cdc_message_period` | i64 | CDC message polling period (ms) | `5000` |
@@ -705,11 +764,17 @@ max_lifetime: 1800
 # Log configuration
 log_level: "debug,sqlx=warn,hyper=info"
 
-# Keycloak authentication configuration
-keycloak_auth_server_url: "http://keycloak:8080/auth/"
-keycloak_realm: "myrealm"
-keycloak_resource: "order-service"
-keycloak_credentials_secret: "your-client-secret"
+# Authentication configuration
+auth_mode: "local"              # "keycloak" or "local"
+jwt_secret: "your-jwt-secret"   # Required for local mode
+jwt_expires_in_secs: 7200       # Token expiration (2 hours)
+auth_admin_url: "http://localhost:6116"
+
+# Keycloak configuration (only needed when auth_mode = "keycloak")
+# keycloak_auth_server_url: "http://keycloak:8080/auth/"
+# keycloak_realm: "myrealm"
+# keycloak_resource: "order-service"
+# keycloak_credentials_secret: "your-client-secret"
 
 # Dapr configuration
 dapr_pubsub_name: "messagebus"
@@ -805,11 +870,11 @@ g2, genies_auth.vo.User.phone, data_group
 
 ### How Field-Level Permissions Work
 
-1. The `#[casbin]` macro modifies the struct by adding `enforcer` and `subject` fields
-2. A custom `Serialize` implementation calls `check_permission` before serializing each field
-3. `check_permission` constructs a request `(subject, "StructName.field_name", "read")`
-4. The Casbin Enforcer decides whether to serialize the field based on policies
-5. Denied fields are omitted from the JSON output
+1. The `casbin_auth()` middleware injects the Casbin Enforcer and current subject into the Salvo `Depot`
+2. When a handler returns a `#[casbin]` VO, its Writer implementation runs automatically
+3. For each field, it checks `(subject, "StructName.field_name", "read")` against Casbin policies
+4. Denied fields are omitted from the JSON response
+5. No custom `Serialize` implementation is needed — filtering happens at the Writer layer
 
 ---
 
