@@ -169,12 +169,33 @@ impl ApplicationContext {
             let driver = create_db_driver(db_url);
             log::info!("rbatis database init ({})...", db_url);
             let _ = self.rbatis.init(driver, db_url).unwrap();
-            
-            let _ = self.rbatis.get_pool().unwrap().set_max_open_conns(self.config.max_connections as u64);
-            let _ = self.rbatis.get_pool().unwrap().set_max_idle_conns(self.config.min_connections as u64);
-            let _ = self.rbatis.get_pool().unwrap().set_conn_max_lifetime(Some(std::time::Duration::from_secs(self.config.max_lifetime)));
         });
-        
+
+        // 【修复 2026-10-06】连接池参数必须在异步上下文中 await 后才真正生效。
+        // 原实现把三处 async 设置放在同步的 call_once 闭包内且未 await——future 创建后即被
+        // 丢弃，max_open/max_idle/max_lifetime 全部保持库默认值（32/32/不限寿命）；
+        // 且此前 min_connections 被误传给 set_max_idle_conns（min/max 语义错位）。
+        // 后果：空闲池长期驻留旧连接（无寿命淘汰），网络路径（NAT/conntrack）静默回收 TCP
+        // 会话后形成半开连接，借连接时的 ping 健康检查会阻塞到检查超时（fast_pool 默认 10s）
+        // 才失败，多个借点叠加表现为业务操作超时（如登录 50s+），重启进程才恢复。
+        // 修正策略：
+        //   ① 空闲池上限 = 最大连接数（连接归还入池复用）；
+        //   ② 借连接总超时接入 wait_timeout 配置（此前该配置从未生效）；
+        //   ③ 连接最大寿命接入 max_lifetime 配置（启用到期主动淘汰，压缩半开连接窗口）。
+        if let Ok(pool) = self.rbatis.get_pool() {
+            let _ = pool.set_max_open_conns(self.config.max_connections as u64).await;
+            let _ = pool.set_max_idle_conns(self.config.max_connections as u64).await;
+            let _ = pool.set_timeout(Some(std::time::Duration::from_secs(self.config.wait_timeout as u64))).await;
+            let _ = pool.set_conn_max_lifetime(Some(std::time::Duration::from_secs(self.config.max_lifetime))).await;
+            log::info!(
+                "rbatis pool configured: max_open={}, max_idle={}, borrow_timeout={}s, max_lifetime={}s",
+                self.config.max_connections, self.config.max_connections,
+                self.config.wait_timeout, self.config.max_lifetime
+            );
+        } else {
+            log::warn!("rbatis pool configuration skipped: get_pool() unavailable");
+        }
+
         // 异步获取连接验证放在 call_once 外面（每次都可以验证）
         let _ = self.rbatis.get_pool().unwrap().get().await;
         
