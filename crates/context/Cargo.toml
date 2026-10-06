@@ -15,7 +15,7 @@ readme = "README.zh-CN.md"
 
 [dependencies]
 genies_core = { workspace = true }
-genies_derive = { workspace = true }
+genies_derive = "1.9.0"
 genies_config = { workspace = true }
 genies_cache = { workspace = true }
 
